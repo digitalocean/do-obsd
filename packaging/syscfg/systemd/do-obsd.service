@@ -1,0 +1,13 @@
+[Unit]
+Description=DigitalOcean Observability Supervisor
+After=network.target
+
+[Service]
+Type=simple
+User=do-obsd
+ExecStart=/opt/digitalocean/bin/do-obsd
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

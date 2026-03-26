@@ -1,0 +1,15 @@
+[Unit]
+Description=DigitalOcean OTel Contrib Collector
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=do-otelcol
+ExecStart=/opt/digitalocean/bin/do-otelcol --config=/etc/do-otelcol/config.yaml
+Restart=on-failure
+RestartSec=5s
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target

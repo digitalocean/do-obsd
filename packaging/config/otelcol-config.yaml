@@ -1,0 +1,17 @@
+# GPU Droplet collector config — placeholder pending Nitish's validation.
+# Log source and receiver to be confirmed on NVIDIA and AMD images.
+receivers:
+  filelog/kern:
+    include:
+      - /var/log/kern.log
+    start_at: end
+
+exporters:
+  debug:
+    verbosity: basic
+
+service:
+  pipelines:
+    logs:
+      receivers: [filelog/kern]
+      exporters: [debug]

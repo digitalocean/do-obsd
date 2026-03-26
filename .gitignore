@@ -1,0 +1,6 @@
+bin/
+dist/
+target/
+*.deb
+*.rpm
+*.asc
