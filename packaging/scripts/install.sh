@@ -10,9 +10,6 @@ REPO_GPG_KEY=${REPO_HOST}/gpg.key
 
 branch="do-obsd-preview"
 
-DOAGENT_REPO_HOST="https://repos.insights.digitalocean.com"
-DOAGENT_GPG_KEY="${DOAGENT_REPO_HOST}/sonar-agent.asc"
-
 RETRY_CRON_SCHEDULE=/etc/cron.hourly
 RETRY_CRON=${RETRY_CRON_SCHEDULE}/do-obsd-install
 
@@ -138,51 +135,12 @@ install_deps() {
   esac
 }
 
-ensure_doagent_apt() {
-  if dpkg -s do-agent >/dev/null 2>&1; then
-    return 0
-  fi
-
-  echo "do-agent not found, configuring do-agent repository..."
-  doagent_keyfile=/usr/share/keyrings/digitalocean-agent-keyring.gpg
-  doagent_list=/etc/apt/sources.list.d/digitalocean-agent.list
-
-  wget -qO- "${DOAGENT_GPG_KEY}" | gpg --dearmor >"${doagent_keyfile}"
-  echo "deb [signed-by=${doagent_keyfile}] ${DOAGENT_REPO_HOST}/apt/do-agent main main" >"${doagent_list}"
-  apt-get -qq update -o Dir::Etc::SourceParts=/dev/null -o APT::Get::List-Cleanup=no -o Dir::Etc::SourceList="sources.list.d/digitalocean-agent.list"
-}
-
-ensure_doagent_yum() {
-  if rpm -q do-agent >/dev/null 2>&1; then
-    return 0
-  fi
-
-  echo "do-agent not found, configuring do-agent repository..."
-  doagent_repo=/etc/yum.repos.d/digitalocean-agent.repo
-  cat <<-REPO >${doagent_repo}
-	[digitalocean-agent]
-	name=DigitalOcean Agent
-	baseurl=${DOAGENT_REPO_HOST}/yum/do-agent/\$basearch
-	repo_gpgcheck=0
-	gpgcheck=1
-	enabled=1
-	gpgkey=${DOAGENT_GPG_KEY}
-	sslverify=0
-	sslcacert=/etc/pki/tls/certs/ca-bundle.crt
-	metadata_expire=300
-	REPO
-
-  yum --disablerepo="*" --enablerepo="digitalocean-agent" makecache
-}
-
 install_apt() (
   set -e
   export DEBIAN_FRONTEND=noninteractive
 
   echo "Setting up do-obsd apt repository..."
   install_deps "deb"
-
-  ensure_doagent_apt
 
   echo "Importing GPG public key"
   wget -qO- "${REPO_GPG_KEY}" | gpg --dearmor >"${deb_keyfile}"
@@ -203,8 +161,6 @@ install_yum() (
 
   echo "Setting up do-obsd yum repository..."
   install_deps "rpm"
-
-  ensure_doagent_yum
 
   cat <<-EOF >${rpm_repo}
 	[${repo_name}]
