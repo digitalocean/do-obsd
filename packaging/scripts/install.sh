@@ -1,10 +1,10 @@
 #!/bin/sh
-#   curl -sSL https://marlin.nyc3.cdn.digitaloceanspaces.com/install.sh | sudo bash
-#   wget -qO- https://marlin.nyc3.cdn.digitaloceanspaces.com/install.sh | sudo bash
+#   curl -sSL https://triton.sfo3.cdn.digitaloceanspaces.com/install.sh | sudo bash
+#   wget -qO- https://triton.sfo3.cdn.digitaloceanspaces.com/install.sh | sudo bash
 
 set -u
 
-REPO_DOMAIN="marlin.nyc3.cdn.digitaloceanspaces.com"
+REPO_DOMAIN="triton.sfo3.cdn.digitaloceanspaces.com"
 REPO_HOST="https://${REPO_DOMAIN}"
 REPO_GPG_KEY=${REPO_HOST}/gpg.key
 
@@ -84,7 +84,7 @@ patch_retry_install() {
 #!/bin/sh
 tmp_file=$(mktemp -t do_obsd.install.XXXXXX)
 trap "rm -f ${tmp_file}" EXIT
-url="https://marlin.nyc3.cdn.digitaloceanspaces.com/install.sh"
+url="https://triton.sfo3.cdn.digitaloceanspaces.com/install.sh"
 install_script=$(curl -sSL "${url}" || wget -qO- "${url}")
 echo "${install_script}" > ${tmp_file}
 now=$(date +"%T")
