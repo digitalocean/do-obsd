@@ -103,7 +103,9 @@ main() {
 create_users() {
 	useradd -r -s /sbin/nologin -d /opt/digitalocean ${SVC_NAME} 2>/dev/null || true
 	useradd -r -s /sbin/nologin -d /opt/digitalocean ${OTELCOL_SVC_NAME} 2>/dev/null || true
-	usermod -aG adm ${OTELCOL_SVC_NAME}
+	if getent group adm >/dev/null 2>&1; then
+		usermod -aG adm "${OTELCOL_SVC_NAME}" || true
+	fi
 }
 
 set_permissions() {
