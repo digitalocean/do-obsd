@@ -15,10 +15,10 @@ CRON=${CRON_SCHEDULE}/${SVC_NAME}
 arg="${1:-0}"
 
 main() {
-	if echo "${arg}" | grep -qP '^\d+$' && [ "${arg}" -gt 0 ]; then
+	if [ "${arg}" -gt 0 ] 2>/dev/null; then
 		# rpm upgrade
 		exit 0
-	elif echo "${arg}" | grep -qP '^upgrade$'; then
+	elif [ "${arg}" = "upgrade" ]; then
 		# deb upgrade
 		exit 0
 	fi
