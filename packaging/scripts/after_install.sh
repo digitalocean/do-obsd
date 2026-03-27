@@ -17,7 +17,7 @@ abort_perm() {
 _ensure_real_dir() {
 	_path="$1"
 	if [ -e "${_path}" ]; then
-		if [ -h "${_path}" ]; then
+		if [ -L "${_path}" ]; then
 			abort_perm "Refusing to change permissions on symlink: ${_path}"
 		fi
 		if [ ! -d "${_path}" ]; then
@@ -34,7 +34,7 @@ _ensure_regular_file() {
 	if [ ! -e "${_path}" ]; then
 		abort_perm "Required file missing (expected from package): ${_path}"
 	fi
-	if [ -h "${_path}" ]; then
+	if [ -L "${_path}" ]; then
 		abort_perm "Refusing to change permissions on symlink: ${_path}"
 	fi
 	if [ ! -f "${_path}" ]; then
@@ -53,6 +53,7 @@ _apply_owner_mode() {
 # secure_path kind path [args...]
 #   dir  path owner mode   — real directory; mkdir -p if missing; chown + chmod; refuse symlinks
 #   dirm path mode         — same as dir for validation/creation, chmod only (owner unchanged)
+#   filem path mode        — regular file from package; must exist; chmod only; refuse symlinks
 #   file path owner mode   — regular file from package; must exist; chown + chmod; refuse symlinks
 secure_path() {
 	_kind="$1"
@@ -64,6 +65,10 @@ secure_path() {
 		;;
 	dirm)
 		_ensure_real_dir "$1"
+		chmod "$2" "$1" || abort_perm "chmod failed: $1"
+		;;
+	filem)
+		_ensure_regular_file "$1"
 		chmod "$2" "$1" || abort_perm "chmod failed: $1"
 		;;
 	file)
@@ -100,8 +105,8 @@ set_permissions() {
 	# do-obsd installs the collector binary to bin/ at startup
 	secure_path dir /opt/digitalocean/bin "${SVC_NAME}:${SVC_NAME}" 755
 
-	# Bundle is read-only; do-obsd reads from here, copies to bin/ (mode only; owner from package)
-	secure_path dirm "/opt/digitalocean/bundle/${OTELCOL_SVC_NAME}" 755
+	# Bundle binary is read-only; mode only (owner from package)
+	secure_path filem "/opt/digitalocean/bundle/${OTELCOL_SVC_NAME}" 755
 
 	# Config: supervisor (do-obsd) writes, collector (do-otelcol) reads
 	secure_path dir "${OTELCOL_CONFIG_DIR}" "${SVC_NAME}:${OTELCOL_SVC_NAME}" 750
