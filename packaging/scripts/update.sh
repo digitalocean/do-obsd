@@ -98,9 +98,9 @@ find_latest_pkg() {
     repo_tree=$(wget -qO- "${REPO_HOST}")
     ;;
   esac
-  files=$(echo "${repo_tree}" | grep -oP '(?<=Key>'"${PKG_PATTERN}"')[^<]+' | tr ' ' '\n')
-  sorted_files=$(echo "${files}" | sort -V)
-  LATEST_VER=$(echo "${sorted_files}" | tail -1 | grep -oP '\d+\.\d+\.\d+')
+  files=$(printf '%s\n' "${repo_tree}" | sed -n 's/.*Key>\([^<]*\)<.*/\1/p' | grep -F "${PKG_PATTERN}" | tr ' ' '\n')
+  sorted_files=$(printf '%s\n' "${files}" | sort -V)
+  LATEST_VER=$(printf '%s\n' "${sorted_files}" | tail -n 1 | sed -n 's/.*\([0-9][0-9A-Za-z.~+-]*\).*/\1/p')
   echo "Latest package:${LATEST_VER}"
 }
 
