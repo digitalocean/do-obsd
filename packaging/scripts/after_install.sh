@@ -8,6 +8,74 @@ OTELCOL_SVC_NAME=do-otelcol
 OTELCOL_CONFIG_DIR=/etc/${OTELCOL_SVC_NAME}
 POLKIT_RULES=/etc/polkit-1/rules.d/60-${SVC_NAME}.rules
 
+abort_perm() {
+	echo "ERROR: $1" >&2
+	exit 1
+}
+
+# Path exists as a real directory or is created; symlinks and non-directories rejected.
+_ensure_real_dir() {
+	_path="$1"
+	if [ -e "${_path}" ]; then
+		if [ -h "${_path}" ]; then
+			abort_perm "Refusing to change permissions on symlink: ${_path}"
+		fi
+		if [ ! -d "${_path}" ]; then
+			abort_perm "Expected directory at: ${_path}"
+		fi
+	else
+		mkdir -p "${_path}" || abort_perm "Cannot create directory: ${_path}"
+	fi
+}
+
+# Path must exist as a regular file from the package; symlinks rejected.
+_ensure_regular_file() {
+	_path="$1"
+	if [ ! -e "${_path}" ]; then
+		abort_perm "Required file missing (expected from package): ${_path}"
+	fi
+	if [ -h "${_path}" ]; then
+		abort_perm "Refusing to change permissions on symlink: ${_path}"
+	fi
+	if [ ! -f "${_path}" ]; then
+		abort_perm "Expected regular file at: ${_path}"
+	fi
+}
+
+_apply_owner_mode() {
+	_path="$1"
+	_owner="$2"
+	_mode="$3"
+	chown "${_owner}" "${_path}" || abort_perm "chown failed: ${_path}"
+	chmod "${_mode}" "${_path}" || abort_perm "chmod failed: ${_path}"
+}
+
+# secure_path kind path [args...]
+#   dir  path owner mode   — real directory; mkdir -p if missing; chown + chmod; refuse symlinks
+#   dirm path mode         — same as dir for validation/creation, chmod only (owner unchanged)
+#   file path owner mode   — regular file from package; must exist; chown + chmod; refuse symlinks
+secure_path() {
+	_kind="$1"
+	shift
+	case "${_kind}" in
+	dir)
+		_ensure_real_dir "$1"
+		_apply_owner_mode "$1" "$2" "$3"
+		;;
+	dirm)
+		_ensure_real_dir "$1"
+		chmod "$2" "$1" || abort_perm "chmod failed: $1"
+		;;
+	file)
+		_ensure_regular_file "$1"
+		_apply_owner_mode "$1" "$2" "$3"
+		;;
+	*)
+		abort_perm "secure_path: unknown kind: ${_kind}"
+		;;
+	esac
+}
+
 main() {
 	create_users
 	set_permissions
@@ -30,17 +98,14 @@ create_users() {
 
 set_permissions() {
 	# do-obsd installs the collector binary to bin/ at startup
-	chown ${SVC_NAME}:${SVC_NAME} /opt/digitalocean/bin
-	chmod 755 /opt/digitalocean/bin
+	secure_path dir /opt/digitalocean/bin "${SVC_NAME}:${SVC_NAME}" 755
 
-	# Bundle is read-only; do-obsd reads from here, copies to bin/
-	chmod 755 /opt/digitalocean/bundle/${OTELCOL_SVC_NAME}
+	# Bundle is read-only; do-obsd reads from here, copies to bin/ (mode only; owner from package)
+	secure_path dirm "/opt/digitalocean/bundle/${OTELCOL_SVC_NAME}" 755
 
 	# Config: supervisor (do-obsd) writes, collector (do-otelcol) reads
-	chown ${SVC_NAME}:${OTELCOL_SVC_NAME} ${OTELCOL_CONFIG_DIR}
-	chmod 750 ${OTELCOL_CONFIG_DIR}
-	chown ${SVC_NAME}:${OTELCOL_SVC_NAME} ${OTELCOL_CONFIG_DIR}/config.yaml
-	chmod 640 ${OTELCOL_CONFIG_DIR}/config.yaml
+	secure_path dir "${OTELCOL_CONFIG_DIR}" "${SVC_NAME}:${OTELCOL_SVC_NAME}" 750
+	secure_path file "${OTELCOL_CONFIG_DIR}/config.yaml" "${SVC_NAME}:${OTELCOL_SVC_NAME}" 640
 }
 
 configure_polkit() {
