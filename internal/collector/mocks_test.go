@@ -10,12 +10,51 @@
 package collector
 
 import (
-	io "io"
+	http "net/http"
 	os "os"
 	reflect "reflect"
 
 	gomock "go.uber.org/mock/gomock"
 )
+
+// MockhttpDoer is a mock of httpDoer interface.
+type MockhttpDoer struct {
+	ctrl     *gomock.Controller
+	recorder *MockhttpDoerMockRecorder
+	isgomock struct{}
+}
+
+// MockhttpDoerMockRecorder is the mock recorder for MockhttpDoer.
+type MockhttpDoerMockRecorder struct {
+	mock *MockhttpDoer
+}
+
+// NewMockhttpDoer creates a new mock instance.
+func NewMockhttpDoer(ctrl *gomock.Controller) *MockhttpDoer {
+	mock := &MockhttpDoer{ctrl: ctrl}
+	mock.recorder = &MockhttpDoerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockhttpDoer) EXPECT() *MockhttpDoerMockRecorder {
+	return m.recorder
+}
+
+// Do mocks base method.
+func (m *MockhttpDoer) Do(req *http.Request) (*http.Response, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Do", req)
+	ret0, _ := ret[0].(*http.Response)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Do indicates an expected call of Do.
+func (mr *MockhttpDoerMockRecorder) Do(req any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Do", reflect.TypeOf((*MockhttpDoer)(nil).Do), req)
+}
 
 // MockosOperator is a mock of osOperator interface.
 type MockosOperator struct {
@@ -54,21 +93,6 @@ func (m *MockosOperator) CreateTemp(dir, pattern string) (tempFile, error) {
 func (mr *MockosOperatorMockRecorder) CreateTemp(dir, pattern any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTemp", reflect.TypeOf((*MockosOperator)(nil).CreateTemp), dir, pattern)
-}
-
-// Open mocks base method.
-func (m *MockosOperator) Open(name string) (io.ReadCloser, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Open", name)
-	ret0, _ := ret[0].(io.ReadCloser)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Open indicates an expected call of Open.
-func (mr *MockosOperatorMockRecorder) Open(name any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Open", reflect.TypeOf((*MockosOperator)(nil).Open), name)
 }
 
 // Remove mocks base method.

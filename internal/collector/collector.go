@@ -1,29 +1,44 @@
 package collector
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 )
 
 const (
-	// BundlePath is where the package ships the collector binary.
-	// In production this is replaced by a download from a Spaces URL
-	// with sha256 verification, delivered via OpAMP.
-	BundlePath = "/opt/digitalocean/bundle/do-otelcol"
+	// CollectorBinaryURL is the HTTPS URL of the do-otelcol binary artifact.
+	CollectorBinaryURL = "https://marlin.nyc3.cdn.digitaloceanspaces.com/do-otelcol/linux-amd64/do-otelcol"
 
 	CollectorBin     = "/opt/digitalocean/bin/do-otelcol"
 	CollectorService = "do-otelcol.service"
+
+	installDownloadTimeout = 30 * time.Minute
 )
+
+func init() {
+	u, err := url.Parse(CollectorBinaryURL)
+	if err != nil || u.Scheme != "https" || u.Host == "" {
+		panic("collector: CollectorBinaryURL must be a valid https URL with a host")
+	}
+}
 
 //go:generate go tool mockgen -source=collector.go -package=collector -destination=mocks_test.go
 
+// httpDoer is implemented by *http.Client for production.
+type httpDoer interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
 // osOperator abstracts OS file operations for testability.
 type osOperator interface {
-	Open(name string) (io.ReadCloser, error)
 	CreateTemp(dir, pattern string) (tempFile, error)
 	Remove(name string) error
 	Rename(oldpath, newpath string) error
@@ -44,28 +59,44 @@ type cmdRunner interface {
 
 // Collector manages the do-otelcol lifecycle.
 type Collector struct {
-	os  osOperator
-	cmd cmdRunner
+	os   osOperator
+	cmd  cmdRunner
+	http httpDoer
 }
 
-// New returns a Collector with real OS and exec implementations.
+// New returns a Collector with real OS, HTTP, and exec implementations.
 func New() *Collector {
 	return &Collector{
 		os:  &realOSOperator{},
 		cmd: &realCmdRunner{},
+		http: &http.Client{
+			Timeout: installDownloadTimeout,
+		},
 	}
 }
 
-// Install copies the bundled binary to the target path atomically.
-// In production, this becomes: download from Spaces URL, verify sha256, rename.
+// Install downloads the collector binary from CollectorBinaryURL and installs it atomically at CollectorBin.
 func (c *Collector) Install() error {
-	slog.Info("installing collector", "src", BundlePath, "dst", CollectorBin)
+	start := time.Now()
+	slog.Info("installing collector", "url", CollectorBinaryURL, "dst", CollectorBin)
 
-	src, err := c.os.Open(BundlePath)
+	ctx, cancel := context.WithTimeout(context.Background(), installDownloadTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, CollectorBinaryURL, nil)
 	if err != nil {
-		return fmt.Errorf("open bundle: %w", err)
+		return fmt.Errorf("build download request: %w", err)
 	}
-	defer func() { _ = src.Close() }()
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("download collector: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("download collector: HTTP %d %s", resp.StatusCode, http.StatusText(resp.StatusCode))
+	}
 
 	tmp, err := c.os.CreateTemp(filepath.Dir(CollectorBin), ".do-otelcol-*")
 	if err != nil {
@@ -74,20 +105,23 @@ func (c *Collector) Install() error {
 	tmpPath := tmp.Name()
 	defer c.os.Remove(tmpPath) //nolint:errcheck
 
-	if _, err := io.Copy(tmp, src); err != nil {
+	if _, err := io.Copy(tmp, resp.Body); err != nil {
 		_ = tmp.Close()
-		return fmt.Errorf("copy binary: %w", err)
+		return fmt.Errorf("write downloaded binary: %w", err)
 	}
-	if err := tmp.Chmod(0755); err != nil {
+
+	if err := tmp.Chmod(0o755); err != nil {
 		_ = tmp.Close()
 		return fmt.Errorf("chmod binary: %w", err)
 	}
 	if err := tmp.Close(); err != nil {
 		return fmt.Errorf("close temp file: %w", err)
 	}
+
 	if err := c.os.Rename(tmpPath, CollectorBin); err != nil {
 		return fmt.Errorf("install binary: %w", err)
 	}
+	slog.Info("collector installed", "dst", CollectorBin, "duration", time.Since(start).Round(time.Millisecond))
 	return nil
 }
 
@@ -113,10 +147,6 @@ func (c *Collector) Stop() error {
 
 // realOSOperator is the production implementation of osOperator.
 type realOSOperator struct{}
-
-func (r *realOSOperator) Open(name string) (io.ReadCloser, error) {
-	return os.Open(name) //nolint:gosec
-}
 
 func (r *realOSOperator) CreateTemp(dir, pattern string) (tempFile, error) {
 	return os.CreateTemp(dir, pattern)
