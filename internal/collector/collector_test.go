@@ -12,6 +12,14 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
+func newTestCollector(mockOS *MockosOperator, mockHTTP *MockhttpDoer) *Collector {
+	return &Collector{
+		os:                  mockOS,
+		http:                mockHTTP,
+		downloadMaxAttempts: 1,
+	}
+}
+
 func TestNew(t *testing.T) {
 	c := New()
 	if c == nil {
@@ -43,7 +51,7 @@ func TestInstall(t *testing.T) {
 		mockOS.EXPECT().Rename("/tmp/.do-otelcol-test", CollectorBin).Return(nil)
 		mockOS.EXPECT().Remove("/tmp/.do-otelcol-test").Return(nil)
 
-		c := &Collector{os: mockOS, http: mockHTTP}
+		c := newTestCollector(mockOS, mockHTTP)
 		if err := c.Install(); err != nil {
 			t.Fatalf("Install: %v", err)
 		}
@@ -54,7 +62,7 @@ func TestInstall(t *testing.T) {
 		mockHTTP := NewMockhttpDoer(ctrl)
 		mockHTTP.EXPECT().Do(gomock.Any()).Return(nil, errors.New("network down"))
 
-		c := &Collector{http: mockHTTP}
+		c := newTestCollector(nil, mockHTTP)
 		err := c.Install()
 		if err == nil || !strings.Contains(err.Error(), "download collector") {
 			t.Fatalf("expected download error, got %v", err)
@@ -70,7 +78,7 @@ func TestInstall(t *testing.T) {
 			Body:       io.NopCloser(strings.NewReader("")),
 		}, nil)
 
-		c := &Collector{http: mockHTTP}
+		c := newTestCollector(nil, mockHTTP)
 		err := c.Install()
 		if err == nil || !strings.Contains(err.Error(), "404") {
 			t.Fatalf("expected HTTP error, got %v", err)
@@ -86,7 +94,7 @@ func TestInstall(t *testing.T) {
 			Body:       io.NopCloser(strings.NewReader("error body")),
 		}, nil)
 
-		c := &Collector{http: mockHTTP}
+		c := newTestCollector(nil, mockHTTP)
 		err := c.Install()
 		if err == nil || !strings.Contains(err.Error(), "500") {
 			t.Fatalf("expected HTTP 500 in error, got %v", err)
@@ -105,7 +113,7 @@ func TestInstall(t *testing.T) {
 		}, nil)
 		mockOS.EXPECT().CreateTemp(filepath.Dir(CollectorBin), gomock.Any()).Return(nil, createErr)
 
-		c := &Collector{os: mockOS, http: mockHTTP}
+		c := newTestCollector(mockOS, mockHTTP)
 		err := c.Install()
 		if !errors.Is(err, createErr) {
 			t.Fatalf("expected create temp error, got %v", err)
@@ -129,7 +137,7 @@ func TestInstall(t *testing.T) {
 		mockTmp.EXPECT().Close().Return(nil)
 		mockOS.EXPECT().Remove("/tmp/.do-otelcol-test").Return(nil)
 
-		c := &Collector{os: mockOS, http: mockHTTP}
+		c := newTestCollector(mockOS, mockHTTP)
 		err := c.Install()
 		if err == nil || !strings.Contains(err.Error(), "write downloaded binary") {
 			t.Fatalf("expected write error, got %v", err)
@@ -157,7 +165,7 @@ func TestInstall(t *testing.T) {
 		mockTmp.EXPECT().Close().Return(nil)
 		mockOS.EXPECT().Remove("/tmp/.do-otelcol-test").Return(nil)
 
-		c := &Collector{os: mockOS, http: mockHTTP}
+		c := newTestCollector(mockOS, mockHTTP)
 		err := c.Install()
 		if !errors.Is(err, chmodErr) {
 			t.Fatalf("expected chmod error, got %v", err)
@@ -182,7 +190,7 @@ func TestInstall(t *testing.T) {
 		mockTmp.EXPECT().Close().Return(closeErr)
 		mockOS.EXPECT().Remove("/tmp/.do-otelcol-test").Return(nil)
 
-		c := &Collector{os: mockOS, http: mockHTTP}
+		c := newTestCollector(mockOS, mockHTTP)
 		err := c.Install()
 		if !errors.Is(err, closeErr) {
 			t.Fatalf("expected close error, got %v", err)
@@ -208,10 +216,35 @@ func TestInstall(t *testing.T) {
 		mockOS.EXPECT().Rename("/tmp/.do-otelcol-test", CollectorBin).Return(renameErr)
 		mockOS.EXPECT().Remove("/tmp/.do-otelcol-test").Return(nil)
 
-		c := &Collector{os: mockOS, http: mockHTTP}
+		c := newTestCollector(mockOS, mockHTTP)
 		err := c.Install()
 		if !errors.Is(err, renameErr) {
 			t.Fatalf("expected rename err, got %v", err)
+		}
+	})
+
+	t.Run("retries once then succeeds", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		mockHTTP := NewMockhttpDoer(ctrl)
+		mockOS := NewMockosOperator(ctrl)
+		mockTmp := NewMocktempFile(ctrl)
+
+		mockHTTP.EXPECT().Do(gomock.Any()).Return(nil, errors.New("connection reset"))
+		mockHTTP.EXPECT().Do(gomock.Any()).Return(&http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(okBody)),
+		}, nil)
+		mockOS.EXPECT().CreateTemp(filepath.Dir(CollectorBin), gomock.Any()).Return(mockTmp, nil)
+		mockTmp.EXPECT().Name().Return("/tmp/.do-otelcol-test").AnyTimes()
+		mockTmp.EXPECT().Write(gomock.Any()).DoAndReturn(func(p []byte) (int, error) { return len(p), nil }).AnyTimes()
+		mockTmp.EXPECT().Chmod(os.FileMode(0o755)).Return(nil)
+		mockTmp.EXPECT().Close().Return(nil)
+		mockOS.EXPECT().Rename("/tmp/.do-otelcol-test", CollectorBin).Return(nil)
+		mockOS.EXPECT().Remove("/tmp/.do-otelcol-test").Return(nil)
+
+		c := &Collector{os: mockOS, http: mockHTTP, downloadMaxAttempts: 2}
+		if err := c.Install(); err != nil {
+			t.Fatalf("Install: %v", err)
 		}
 	})
 }

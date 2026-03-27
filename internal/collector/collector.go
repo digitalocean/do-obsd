@@ -6,7 +6,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,15 +18,10 @@ const (
 
 	CollectorBin     = "/opt/digitalocean/bin/do-otelcol"
 	CollectorService = "do-otelcol.service"
-
-	installDownloadTimeout = 30 * time.Minute
 )
 
 func init() {
-	u, err := url.Parse(CollectorBinaryURL)
-	if err != nil || u.Scheme != "https" || u.Host == "" {
-		panic("collector: CollectorBinaryURL must be a valid https URL with a host")
-	}
+	validateArtifactURL()
 }
 
 //go:generate go tool mockgen -source=collector.go -package=collector -destination=mocks_test.go
@@ -62,6 +56,10 @@ type Collector struct {
 	os   osOperator
 	cmd  cmdRunner
 	http httpDoer
+
+	// test-only knobs
+	downloadMaxAttempts int
+	userAgent           string
 }
 
 // New returns a Collector with real OS, HTTP, and exec implementations.
@@ -69,9 +67,7 @@ func New() *Collector {
 	return &Collector{
 		os:  &realOSOperator{},
 		cmd: &realCmdRunner{},
-		http: &http.Client{
-			Timeout: installDownloadTimeout,
-		},
+		http: newBinaryDownloadHTTPClient(),
 	}
 }
 
@@ -80,17 +76,12 @@ func (c *Collector) Install() error {
 	start := time.Now()
 	slog.Info("installing collector", "url", CollectorBinaryURL, "dst", CollectorBin)
 
-	ctx, cancel := context.WithTimeout(context.Background(), installDownloadTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), installOperationTimeout)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, CollectorBinaryURL, nil)
+	resp, err := c.fetchArtifact(ctx)
 	if err != nil {
-		return fmt.Errorf("build download request: %w", err)
-	}
-
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return fmt.Errorf("download collector: %w", err)
+		return err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
