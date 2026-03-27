@@ -184,11 +184,11 @@ install_yum() (
 	[${repo_name}]
 	name=DigitalOcean Observability Supervisor
 	baseurl=${REPO_HOST}/yum/${branch}/\$basearch
-	repo_gpgcheck=0
+	repo_gpgcheck=1
 	gpgcheck=1
 	enabled=1
 	gpgkey=${REPO_GPG_KEY}
-	sslverify=0
+	sslverify=1
 	sslcacert=/etc/pki/tls/certs/ca-bundle.crt
 	metadata_expire=300
 	EOF
