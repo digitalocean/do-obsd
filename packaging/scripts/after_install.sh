@@ -16,10 +16,10 @@ abort_perm() {
 # Path exists as a real directory or is created; symlinks and non-directories rejected.
 _ensure_real_dir() {
 	_path="$1"
+	if [ -L "${_path}" ]; then
+		abort_perm "Refusing to change permissions on symlink: ${_path}"
+	fi
 	if [ -e "${_path}" ]; then
-		if [ -L "${_path}" ]; then
-			abort_perm "Refusing to change permissions on symlink: ${_path}"
-		fi
 		if [ ! -d "${_path}" ]; then
 			abort_perm "Expected directory at: ${_path}"
 		fi
@@ -31,11 +31,11 @@ _ensure_real_dir() {
 # Path must exist as a regular file from the package; symlinks rejected.
 _ensure_regular_file() {
 	_path="$1"
-	if [ ! -e "${_path}" ]; then
-		abort_perm "Required file missing (expected from package): ${_path}"
-	fi
 	if [ -L "${_path}" ]; then
 		abort_perm "Refusing to change permissions on symlink: ${_path}"
+	fi
+	if [ ! -e "${_path}" ]; then
+		abort_perm "Required file missing (expected from package): ${_path}"
 	fi
 	if [ ! -f "${_path}" ]; then
 		abort_perm "Expected regular file at: ${_path}"
