@@ -7,6 +7,9 @@ SVC_NAME=do-obsd
 OTELCOL_SVC_NAME=do-otelcol
 OTELCOL_CONFIG_DIR=/etc/${OTELCOL_SVC_NAME}
 POLKIT_RULES=/etc/polkit-1/rules.d/60-${SVC_NAME}.rules
+INSTALL_DIR=/opt/digitalocean/${SVC_NAME}
+CRON_SCHEDULE=/etc/cron.hourly
+CRON=${CRON_SCHEDULE}/${SVC_NAME}
 
 abort_perm() {
 	echo "ERROR: $1" >&2
@@ -93,6 +96,8 @@ main() {
 	echo "enable systemd service"
 	systemctl enable -f ${SVC_NAME}
 	systemctl restart ${SVC_NAME}
+
+	patch_updates
 }
 
 create_users() {
@@ -111,6 +116,19 @@ set_permissions() {
 	# Config: supervisor (do-obsd) writes, collector (do-otelcol) reads
 	secure_path dir "${OTELCOL_CONFIG_DIR}" "${SVC_NAME}:${OTELCOL_SVC_NAME}" 750
 	secure_path file "${OTELCOL_CONFIG_DIR}/config.yaml" "${SVC_NAME}:${OTELCOL_SVC_NAME}" 640
+}
+
+patch_updates() {
+	[ -f "${CRON}" ] && rm -f "${CRON}"
+	script="${INSTALL_DIR}/scripts/update.sh"
+	mkdir -p ${CRON_SCHEDULE}
+
+	cat <<-EOF >"${CRON}"
+	#!/bin/sh
+	/bin/bash ${script} >/var/log/${SVC_NAME}.update.log 2>&1
+	EOF
+
+	chmod +x "${CRON}"
 }
 
 configure_polkit() {

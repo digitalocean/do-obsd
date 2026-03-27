@@ -7,6 +7,8 @@ SVC_NAME=do-obsd
 OTELCOL_SVC_NAME=do-otelcol
 OTELCOL_CONFIG_DIR=/etc/${OTELCOL_SVC_NAME}
 POLKIT_RULES=/etc/polkit-1/rules.d/60-${SVC_NAME}.rules
+CRON_SCHEDULE=/etc/cron.hourly
+CRON=${CRON_SCHEDULE}/${SVC_NAME}
 
 # fix an issue where this script runs on upgrades for rpm
 # see https://github.com/jordansissel/fpm/issues/1175#issuecomment-240086016
@@ -22,11 +24,16 @@ main() {
 	fi
 
 	clean_systemd
+	remove_cron
 
 	# full cleanup on purge (deb) or complete removal (rpm arg=0)
 	if [ "${arg}" = "purge" ] || [ "${arg}" = "0" ]; then
 		clean_resources
 	fi
+}
+
+remove_cron() {
+	rm -fv "${CRON}"
 }
 
 clean_systemd() {
