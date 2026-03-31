@@ -277,6 +277,12 @@ DO_AGENT_INSTALL_HOST="repos.insights.digitalocean.com"
 DO_AGENT_INSTALL_PATH="/install.sh"
 DO_AGENT_INSTALL_URL="https://${DO_AGENT_INSTALL_HOST}${DO_AGENT_INSTALL_PATH}"
 DO_AGENT_INSTALL_SHA256="16ed4f1124ea4c9cf6507ed040b36214aee3077c8949cf2fb4aca2b477f2346a"
+# Best-effort download only: cap wait so DNS/network stalls cannot hang the main installer.
+DO_AGENT_DOWNLOAD_CONNECT_TIMEOUT=20
+DO_AGENT_DOWNLOAD_MAX_TIME=120
+DO_AGENT_DOWNLOAD_RETRIES=3
+DO_AGENT_DOWNLOAD_WGET_TIMEOUT=30
+DO_AGENT_DOWNLOAD_WGET_TRIES=3
 
 validate_do_agent_install_url() {
   case "${DO_AGENT_INSTALL_URL}" in
@@ -348,12 +354,20 @@ ensure_do_agent() {
     trap 'rm -f "${tmp_file}"' EXIT INT HUP TERM
 
     if command -v curl >/dev/null 2>&1; then
-      if ! curl -fsSL "${DO_AGENT_INSTALL_URL}" -o "${tmp_file}"; then
+      if ! curl -fsSL \
+        --connect-timeout "${DO_AGENT_DOWNLOAD_CONNECT_TIMEOUT}" \
+        --max-time "${DO_AGENT_DOWNLOAD_MAX_TIME}" \
+        --retry "${DO_AGENT_DOWNLOAD_RETRIES}" \
+        --retry-delay 2 \
+        "${DO_AGENT_INSTALL_URL}" -o "${tmp_file}"; then
         echo "WARN: failed to download do-agent install script, continuing without it" >&2
         exit 1
       fi
     elif command -v wget >/dev/null 2>&1; then
-      if ! wget -qO "${tmp_file}" "${DO_AGENT_INSTALL_URL}"; then
+      if ! wget -qO "${tmp_file}" \
+        --timeout="${DO_AGENT_DOWNLOAD_WGET_TIMEOUT}" \
+        --tries="${DO_AGENT_DOWNLOAD_WGET_TRIES}" \
+        "${DO_AGENT_INSTALL_URL}"; then
         echo "WARN: failed to download do-agent install script, continuing without it" >&2
         exit 1
       fi
