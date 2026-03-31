@@ -65,7 +65,7 @@ main() {
   esac
 
   if [ ${exit_status} -eq 0 ]; then
-    ensure_do_agent
+    ensure_do_agent || true
   fi
 }
 
@@ -278,7 +278,7 @@ ensure_do_agent() {
 
   case "${dist}" in
   debian | ubuntu)
-    if dpkg -l do-agent 2>/dev/null | grep -q '^ii'; then
+    if dpkg -s do-agent 2>/dev/null | grep -q '^Status: install ok installed'; then
       echo "do-agent is already installed, skipping"
       return 0
     fi
@@ -289,20 +289,44 @@ ensure_do_agent() {
       return 0
     fi
     ;;
+  *)
+    echo "WARN: unknown distribution '${dist}', skipping do-agent install" >&2
+    return 0
+    ;;
   esac
 
   echo "Installing do-agent..."
+  tmp_file=$(mktemp -t do_agent_install.XXXXXX)
+
   if command -v curl >/dev/null 2>&1; then
-    curl -sSL "${DO_AGENT_INSTALL_URL}" | bash || {
-      echo "WARN: do-agent installation failed, continuing without it" >&2
-    }
+    if ! curl -sSL "${DO_AGENT_INSTALL_URL}" -o "${tmp_file}"; then
+      echo "WARN: failed to download do-agent install script, continuing without it" >&2
+      rm -f "${tmp_file}"
+      return 0
+    fi
   elif command -v wget >/dev/null 2>&1; then
-    wget -qO- "${DO_AGENT_INSTALL_URL}" | bash || {
-      echo "WARN: do-agent installation failed, continuing without it" >&2
-    }
+    if ! wget -qO "${tmp_file}" "${DO_AGENT_INSTALL_URL}"; then
+      echo "WARN: failed to download do-agent install script, continuing without it" >&2
+      rm -f "${tmp_file}"
+      return 0
+    fi
   else
     echo "WARN: neither curl nor wget available, skipping do-agent install" >&2
+    rm -f "${tmp_file}"
+    return 0
   fi
+
+  if [ ! -s "${tmp_file}" ]; then
+    echo "WARN: downloaded do-agent install script is empty, skipping" >&2
+    rm -f "${tmp_file}"
+    return 0
+  fi
+
+  /bin/sh "${tmp_file}" || {
+    echo "WARN: do-agent installation failed, continuing without it" >&2
+  }
+  rm -f "${tmp_file}"
+  return 0
 }
 
 # leave this last to prevent any partial executions
