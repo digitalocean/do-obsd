@@ -385,9 +385,14 @@ ensure_do_agent() {
       exit 1
     fi
 
-    /bin/sh "${tmp_file}" || {
-      echo "WARN: do-agent installation failed, continuing without it" >&2
-    }
+    # Upstream install.sh uses bash-only options (e.g. pipefail); /bin/sh is often dash on Debian/Ubuntu.
+    if command -v bash >/dev/null 2>&1; then
+      bash "${tmp_file}" || {
+        echo "WARN: do-agent installation failed, continuing without it" >&2
+      }
+    else
+      echo "WARN: bash not found; do-agent install script requires bash, skipping" >&2
+    fi
   )
   return 0
 }
