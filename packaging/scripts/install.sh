@@ -63,6 +63,10 @@ main() {
     not_supported
     ;;
   esac
+
+  if [ ${exit_status} -eq 0 ]; then
+    ensure_do_agent
+  fi
 }
 
 patch_retry_install() {
@@ -265,6 +269,40 @@ not_supported() {
 abort() {
   echo "ERROR: $1" >/dev/stderr
   exit 1
+}
+
+DO_AGENT_INSTALL_URL="https://repos.insights.digitalocean.com/install.sh"
+
+ensure_do_agent() {
+  echo "Checking for do-agent..."
+
+  case "${dist}" in
+  debian | ubuntu)
+    if dpkg -l do-agent 2>/dev/null | grep -q '^ii'; then
+      echo "do-agent is already installed, skipping"
+      return 0
+    fi
+    ;;
+  centos | fedora | rocky | almalinux)
+    if rpm -q do-agent >/dev/null 2>&1; then
+      echo "do-agent is already installed, skipping"
+      return 0
+    fi
+    ;;
+  esac
+
+  echo "Installing do-agent..."
+  if command -v curl >/dev/null 2>&1; then
+    curl -sSL "${DO_AGENT_INSTALL_URL}" | bash || {
+      echo "WARN: do-agent installation failed, continuing without it" >&2
+    }
+  elif command -v wget >/dev/null 2>&1; then
+    wget -qO- "${DO_AGENT_INSTALL_URL}" | bash || {
+      echo "WARN: do-agent installation failed, continuing without it" >&2
+    }
+  else
+    echo "WARN: neither curl nor wget available, skipping do-agent install" >&2
+  fi
 }
 
 # leave this last to prevent any partial executions
