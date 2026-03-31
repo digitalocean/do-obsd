@@ -335,41 +335,46 @@ ensure_do_agent() {
   fi
 
   echo "Installing do-agent..."
-  tmp_file=$(mktemp -t do_agent_install.XXXXXX)
-
-  if command -v curl >/dev/null 2>&1; then
-    if ! curl -fsSL "${DO_AGENT_INSTALL_URL}" -o "${tmp_file}"; then
-      echo "WARN: failed to download do-agent install script, continuing without it" >&2
-      rm -f "${tmp_file}"
-      return 0
+  # Subshell so EXIT trap runs when this block ends (POSIX sh does not run EXIT on function return).
+  (
+    tmp_file=$(mktemp -t do_agent_install.XXXXXX) || {
+      echo "WARN: could not create temp file for do-agent install" >&2
+      exit 1
+    }
+    if [ -z "${tmp_file}" ]; then
+      echo "WARN: mktemp returned empty path, skipping do-agent install" >&2
+      exit 1
     fi
-  elif command -v wget >/dev/null 2>&1; then
-    if ! wget -qO "${tmp_file}" "${DO_AGENT_INSTALL_URL}"; then
-      echo "WARN: failed to download do-agent install script, continuing without it" >&2
-      rm -f "${tmp_file}"
-      return 0
+    trap 'rm -f "${tmp_file}"' EXIT INT HUP TERM
+
+    if command -v curl >/dev/null 2>&1; then
+      if ! curl -fsSL "${DO_AGENT_INSTALL_URL}" -o "${tmp_file}"; then
+        echo "WARN: failed to download do-agent install script, continuing without it" >&2
+        exit 1
+      fi
+    elif command -v wget >/dev/null 2>&1; then
+      if ! wget -qO "${tmp_file}" "${DO_AGENT_INSTALL_URL}"; then
+        echo "WARN: failed to download do-agent install script, continuing without it" >&2
+        exit 1
+      fi
+    else
+      echo "WARN: neither curl nor wget available, skipping do-agent install" >&2
+      exit 1
     fi
-  else
-    echo "WARN: neither curl nor wget available, skipping do-agent install" >&2
-    rm -f "${tmp_file}"
-    return 0
-  fi
 
-  if [ ! -s "${tmp_file}" ]; then
-    echo "WARN: downloaded do-agent install script is empty, skipping" >&2
-    rm -f "${tmp_file}"
-    return 0
-  fi
+    if [ ! -s "${tmp_file}" ]; then
+      echo "WARN: downloaded do-agent install script is empty, skipping" >&2
+      exit 1
+    fi
 
-  if ! verify_do_agent_installer_checksum "${tmp_file}"; then
-    rm -f "${tmp_file}"
-    return 0
-  fi
+    if ! verify_do_agent_installer_checksum "${tmp_file}"; then
+      exit 1
+    fi
 
-  /bin/sh "${tmp_file}" || {
-    echo "WARN: do-agent installation failed, continuing without it" >&2
-  }
-  rm -f "${tmp_file}"
+    /bin/sh "${tmp_file}" || {
+      echo "WARN: do-agent installation failed, continuing without it" >&2
+    }
+  )
   return 0
 }
 
