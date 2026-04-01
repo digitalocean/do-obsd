@@ -107,10 +107,7 @@ func retryableRequestErr(err error) bool {
 		return false
 	}
 	var certErr *tls.CertificateVerificationError
-	if errors.As(err, &certErr) {
-		return false
-	}
-	return true
+	return !errors.As(err, &certErr)
 }
 
 func drainAndClose(resp *http.Response) {
