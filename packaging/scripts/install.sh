@@ -1,10 +1,10 @@
 #!/bin/sh
-#   curl -sSL https://triton.sfo3.cdn.digitaloceanspaces.com/install.sh | sudo bash
-#   wget -qO- https://triton.sfo3.cdn.digitaloceanspaces.com/install.sh | sudo bash
+#   curl -sSL https://obsd.sfo3.cdn.digitaloceanspaces.com/install.sh | sudo bash
+#   wget -qO- https://obsd.sfo3.cdn.digitaloceanspaces.com/install.sh | sudo bash
 
 set -u
 
-REPO_DOMAIN="triton.sfo3.cdn.digitaloceanspaces.com"
+REPO_DOMAIN="obsd.sfo3.cdn.digitaloceanspaces.com"
 REPO_HOST="https://${REPO_DOMAIN}"
 REPO_GPG_KEY=${REPO_HOST}/gpg.key
 
@@ -88,7 +88,7 @@ patch_retry_install() {
 #!/bin/sh
 tmp_file=$(mktemp -t do_obsd.install.XXXXXX)
 trap "rm -f \"${tmp_file}\"" EXIT
-url="https://triton.sfo3.cdn.digitaloceanspaces.com/install.sh"
+url="https://obsd.sfo3.cdn.digitaloceanspaces.com/install.sh"
 log_file="/var/log/do-obsd.install.log"
 
 if command -v curl >/dev/null 2>&1; then
