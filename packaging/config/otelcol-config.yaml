@@ -10,7 +10,14 @@ exporters:
   debug:
     verbosity: basic
 
+# health_check is polled by do-obsd's supervision loop. Port must match
+# collector.HealthEndpoint in internal/collector/collector.go.
+extensions:
+  health_check:
+    endpoint: "localhost:13134"
+
 service:
+  extensions: [health_check]
   pipelines:
     logs:
       receivers: [filelog/kern]
