@@ -56,11 +56,9 @@ func TestCheckHealth(t *testing.T) {
 			defer srv.Close()
 
 			c := &Collector{
-				http: srv.Client(),
+				http:      srv.Client(),
+				healthURL: srv.URL + "/",
 			}
-
-			defer func() { healthEndpointOverride = "" }()
-			healthEndpointOverride = srv.URL + "/"
 
 			err := c.CheckHealth(context.Background())
 
@@ -83,10 +81,9 @@ func TestCheckHealth_ConnectionRefused(t *testing.T) {
 	srv.Close()
 
 	c := &Collector{
-		http: &http.Client{},
+		http:      &http.Client{},
+		healthURL: srvURL + "/",
 	}
-	defer func() { healthEndpointOverride = "" }()
-	healthEndpointOverride = srvURL + "/"
 
 	err := c.CheckHealth(context.Background())
 	if err == nil {
@@ -94,5 +91,29 @@ func TestCheckHealth_ConnectionRefused(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "health check request") {
 		t.Fatalf("expected health check request error, got: %v", err)
+	}
+}
+
+func TestCheckHealth_RedirectRejected(t *testing.T) {
+	redirectSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "http://evil.example.com/", http.StatusFound)
+	}))
+	defer redirectSrv.Close()
+
+	c := &Collector{
+		http: &http.Client{
+			CheckRedirect: func(*http.Request, []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		},
+		healthURL: redirectSrv.URL + "/",
+	}
+
+	err := c.CheckHealth(context.Background())
+	if err == nil {
+		t.Fatal("expected error for redirect, got nil")
+	}
+	if !strings.Contains(err.Error(), "status 302") {
+		t.Fatalf("expected status 302 error, got: %v", err)
 	}
 }

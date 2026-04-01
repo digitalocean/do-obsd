@@ -23,6 +23,8 @@ const (
 	// HealthEndpoint is the address of the collector's healthcheck extension.
 	// Uses a non-default port (default is 13133) to avoid conflicts with
 	// customer-installed collectors.
+	// HealthEndpoint must match the endpoint in otelcol-config.yaml's
+	// health_check extension. If one changes, the other must too.
 	HealthEndpoint = "http://localhost:13134/"
 	HealthTimeout  = 3 * time.Second
 )
@@ -52,17 +54,25 @@ type cmdRunner interface {
 
 // Collector manages the do-otelcol lifecycle.
 type Collector struct {
-	os   osOperator
-	cmd  cmdRunner
-	http httpClient
+	os        osOperator
+	cmd       cmdRunner
+	http      httpClient
+	healthURL string
 }
 
 // New returns a Collector with real OS and exec implementations.
 func New() *Collector {
 	return &Collector{
-		os:   &realOSOperator{},
-		cmd:  &realCmdRunner{},
-		http: &http.Client{},
+		os:  &realOSOperator{},
+		cmd: &realCmdRunner{},
+		// Reject redirects: a health probe should never follow redirects,
+		// which could point to an external or attacker-controlled host.
+		http: &http.Client{
+			CheckRedirect: func(*http.Request, []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		},
+		healthURL: HealthEndpoint,
 	}
 }
 
@@ -82,7 +92,7 @@ func (c *Collector) Install() error {
 		return fmt.Errorf("create temp file: %w", err)
 	}
 	tmpPath := tmp.Name()
-	defer c.os.Remove(tmpPath) //nolint:errcheck
+	defer c.os.Remove(tmpPath) //nolint:errcheck // best-effort cleanup; no-op after successful rename
 
 	if _, err := io.Copy(tmp, src); err != nil {
 		_ = tmp.Close()
@@ -122,6 +132,8 @@ func (c *Collector) Stop() error {
 }
 
 // Restart restarts do-otelcol.service via systemctl.
+// Requires polkit rule granting the do-obsd user manage-units on do-otelcol.service
+// (installed by after_install.sh).
 func (c *Collector) Restart() error {
 	slog.Info("restarting collector", "service", CollectorService)
 	out, err := c.cmd.Run("systemctl", "restart", CollectorService)

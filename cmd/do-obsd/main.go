@@ -12,12 +12,16 @@ import (
 	"github.com/digitalocean/do-obsd/internal/collector"
 )
 
+// Supervision loop parameters. These work together: the loop polls health every
+// healthCheckInterval, and after failureThreshold consecutive failures it restarts
+// do-otelcol with exponential backoff. restartCount resets only when the collector
+// reports healthy again; it is NOT decremented over time.
 const (
-	healthCheckInterval  = 15 * time.Second
-	failureThreshold     = 3
-	maxRestarts          = 5
-	initialBackoff       = 5 * time.Second
-	maxBackoff           = 60 * time.Second
+	healthCheckInterval = 15 * time.Second
+	failureThreshold    = 3
+	maxRestarts         = 5
+	initialBackoff      = 5 * time.Second
+	maxBackoff          = 60 * time.Second
 )
 
 func main() {
@@ -45,6 +49,10 @@ func run() error {
 	return supervise(col)
 }
 
+// supervise polls the collector's healthcheck extension and restarts do-otelcol
+// when it becomes unresponsive. This catches "running but broken" states (e.g.
+// frozen process, resource starvation) that systemd's Restart=on-failure cannot
+// detect. Will be replaced by OpAMP's push-based health reporting in the future.
 func supervise(col *collector.Collector) error {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGTERM, syscall.SIGINT)
@@ -52,10 +60,23 @@ func supervise(col *collector.Collector) error {
 	ticker := time.NewTicker(healthCheckInterval)
 	defer ticker.Stop()
 
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	consecutiveFails := 0
 	restartCount := 0
 	backoff := initialBackoff
+
+	// shutdown cancels in-flight health checks and stops the collector.
+	// Returns nil so the process exits cleanly with code 0.
+	shutdown := func(sig os.Signal) error {
+		slog.Info("received signal, stopping", "signal", sig)
+		cancel()
+		if err := col.Stop(); err != nil {
+			slog.Warn("stop collector failed", "err", err)
+		}
+		return nil
+	}
 
 	for {
 		select {
@@ -73,6 +94,9 @@ func supervise(col *collector.Collector) error {
 						slog.Error("max restarts reached, not restarting collector",
 							"restart_count", restartCount,
 						)
+						// Reset so we don't log this every tick; counters
+						// fully reset if the collector becomes healthy again.
+						consecutiveFails = 0
 						continue
 					}
 
@@ -81,13 +105,23 @@ func supervise(col *collector.Collector) error {
 						"restart_count", restartCount+1,
 						"max_restarts", maxRestarts,
 					)
-					time.Sleep(backoff)
 
-					if err := col.Restart(); err != nil {
-						slog.Error("restart collector failed", "err", err)
+					// select instead of time.Sleep so SIGTERM during backoff
+					// is handled immediately rather than blocking up to maxBackoff.
+					select {
+					case <-time.After(backoff):
+					case sig := <-sigs:
+						return shutdown(sig)
 					}
 
-					restartCount++
+					// Only count successful restarts against the budget; a failed
+					// systemctl call (e.g. permission denied) should not exhaust
+					// our restart attempts since the collector was never restarted.
+					if err := col.Restart(); err != nil {
+						slog.Error("restart collector failed", "err", err)
+					} else {
+						restartCount++
+					}
 					backoff = min(backoff*2, maxBackoff)
 					consecutiveFails = 0
 				}
@@ -104,11 +138,7 @@ func supervise(col *collector.Collector) error {
 			}
 
 		case sig := <-sigs:
-			slog.Info("received signal, stopping", "signal", sig)
-			if err := col.Stop(); err != nil {
-				slog.Warn("stop collector failed", "err", err)
-			}
-			return nil
+			return shutdown(sig)
 		}
 	}
 }
