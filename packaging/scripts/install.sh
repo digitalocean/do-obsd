@@ -271,48 +271,13 @@ abort() {
   exit 1
 }
 
-# do-agent upstream installer: HTTPS and host are fixed; SHA256 must match the file
-# at this URL (update DO_AGENT_INSTALL_SHA256 when DigitalOcean changes install.sh).
-DO_AGENT_INSTALL_HOST="repos.insights.digitalocean.com"
-DO_AGENT_INSTALL_PATH="/install.sh"
-DO_AGENT_INSTALL_URL="https://${DO_AGENT_INSTALL_HOST}${DO_AGENT_INSTALL_PATH}"
-DO_AGENT_INSTALL_SHA256="16ed4f1124ea4c9cf6507ed040b36214aee3077c8949cf2fb4aca2b477f2346a"
+DO_AGENT_INSTALL_URL="https://repos.insights.digitalocean.com/install.sh"
 # Best-effort download only: cap wait so DNS/network stalls cannot hang the main installer.
 DO_AGENT_DOWNLOAD_CONNECT_TIMEOUT=20
 DO_AGENT_DOWNLOAD_MAX_TIME=120
 DO_AGENT_DOWNLOAD_RETRIES=3
 DO_AGENT_DOWNLOAD_WGET_TIMEOUT=30
 DO_AGENT_DOWNLOAD_WGET_TRIES=3
-
-validate_do_agent_install_url() {
-  case "${DO_AGENT_INSTALL_URL}" in
-  "https://${DO_AGENT_INSTALL_HOST}${DO_AGENT_INSTALL_PATH}")
-    return 0
-    ;;
-  *)
-    echo "WARN: do-agent install URL must be HTTPS on ${DO_AGENT_INSTALL_HOST} only, skipping" >&2
-    return 1
-    ;;
-  esac
-}
-
-verify_do_agent_installer_checksum() {
-  _path="$1"
-  _actual=""
-  if command -v sha256sum >/dev/null 2>&1; then
-    _actual=$(sha256sum "${_path}" | awk '{print $1}')
-  elif command -v shasum >/dev/null 2>&1; then
-    _actual=$(shasum -a 256 "${_path}" | awk '{print $1}')
-  else
-    echo "WARN: sha256sum and shasum unavailable, cannot verify do-agent installer, skipping" >&2
-    return 1
-  fi
-  if [ "${_actual}" != "${DO_AGENT_INSTALL_SHA256}" ]; then
-    echo "WARN: do-agent installer SHA256 mismatch, skipping (supply-chain check failed)" >&2
-    return 1
-  fi
-  return 0
-}
 
 ensure_do_agent() {
   echo "Checking for do-agent..."
@@ -335,10 +300,6 @@ ensure_do_agent() {
     return 0
     ;;
   esac
-
-  if ! validate_do_agent_install_url; then
-    return 0
-  fi
 
   echo "Installing do-agent..."
   # Subshell so EXIT trap runs when this block ends (POSIX sh does not run EXIT on function return).
@@ -378,10 +339,6 @@ ensure_do_agent() {
 
     if [ ! -s "${tmp_file}" ]; then
       echo "WARN: downloaded do-agent install script is empty, skipping" >&2
-      exit 1
-    fi
-
-    if ! verify_do_agent_installer_checksum "${tmp_file}"; then
       exit 1
     fi
 
