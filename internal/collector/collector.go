@@ -17,6 +17,11 @@ const (
 
 	CollectorBin     = "/opt/digitalocean/bin/do-otelcol"
 	CollectorService = "do-otelcol.service"
+
+	// Start/Stop run systemctl via sudo -n so do-obsd can manage units when polkit
+	// denies non-interactive sessions ("Interactive authentication required").
+	sudoBin      = "/usr/bin/sudo"
+	systemctlBin = "/usr/bin/systemctl"
 )
 
 //go:generate go tool mockgen -source=collector.go -package=collector -destination=mocks_test.go
@@ -94,7 +99,7 @@ func (c *Collector) Install() error {
 // Start starts do-otelcol.service via systemctl.
 func (c *Collector) Start() error {
 	slog.Info("starting collector", "service", CollectorService)
-	out, err := c.cmd.Run("systemctl", "start", CollectorService)
+	out, err := c.cmd.Run(sudoBin, "-n", systemctlBin, "start", CollectorService)
 	if err != nil {
 		return fmt.Errorf("systemctl start %s: %w (output: %s)", CollectorService, err, out)
 	}
@@ -104,7 +109,7 @@ func (c *Collector) Start() error {
 // Stop stops do-otelcol.service via systemctl.
 func (c *Collector) Stop() error {
 	slog.Info("stopping collector", "service", CollectorService)
-	out, err := c.cmd.Run("systemctl", "stop", CollectorService)
+	out, err := c.cmd.Run(sudoBin, "-n", systemctlBin, "stop", CollectorService)
 	if err != nil {
 		return fmt.Errorf("systemctl stop %s: %w (output: %s)", CollectorService, err, out)
 	}

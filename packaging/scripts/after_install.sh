@@ -7,6 +7,7 @@ SVC_NAME=do-obsd
 OTELCOL_SVC_NAME=do-otelcol
 OTELCOL_CONFIG_DIR=/etc/${OTELCOL_SVC_NAME}
 POLKIT_RULES=/etc/polkit-1/rules.d/60-${SVC_NAME}.rules
+SUDOERS_DROPIN=/etc/sudoers.d/${SVC_NAME}
 INSTALL_DIR=/opt/digitalocean/${SVC_NAME}
 CRON_SCHEDULE=/etc/cron.hourly
 CRON=${CRON_SCHEDULE}/${SVC_NAME}
@@ -88,6 +89,7 @@ main() {
 	create_users
 	set_permissions
 	configure_polkit
+	configure_sudoers
 
 	systemctl daemon-reload
 
@@ -144,6 +146,19 @@ polkit.addRule(function(action, subject) {
     }
 });
 POLKIT
+}
+
+# Polkit often still prompts for auth from non-interactive systemd units; sudoers allows
+# passwordless /usr/bin/systemctl for do-otelcol only (matches do-obsd binary behavior).
+configure_sudoers() {
+	cat >"${SUDOERS_DROPIN}" <<'EOF'
+# Managed by do-obsd package — allow supervisor to start/stop the collector without TTY auth.
+do-obsd ALL=(root) NOPASSWD: /usr/bin/systemctl start do-otelcol.service, /usr/bin/systemctl stop do-otelcol.service, /usr/bin/systemctl restart do-otelcol.service, /usr/bin/systemctl reload do-otelcol.service
+EOF
+	chmod 0440 "${SUDOERS_DROPIN}" || abort_perm "chmod sudoers drop-in failed"
+	if command -v visudo >/dev/null 2>&1; then
+		visudo -cf "${SUDOERS_DROPIN}" || abort_perm "sudoers drop-in failed validation"
+	fi
 }
 
 main
