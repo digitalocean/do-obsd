@@ -17,20 +17,16 @@ The supervisor runs as **`do-obsd`**, not root. Starting another unit (`do-otelc
 
 A polkit rule alone is not reliable here because rule matching varies by OS/polkit version.
 
-For more detail (GPU images, polkit, and why manual steps exist until a new package ships), see **[`docs/systemctl-sudo-and-gpu-droplets.md`](docs/systemctl-sudo-and-gpu-droplets.md)**.
-
-Plain-language walkthrough (GPU vs normal Droplet, what we changed, manual steps vs publishing): **[`docs/gpu-droplet-fix-explained.md`](docs/gpu-droplet-fix-explained.md)**.
-
 **What we implemented:**
 
 1. **Code** ([`internal/collector/collector.go`](internal/collector/collector.go)) — `Start` and `Stop` invoke  
    `/usr/bin/sudo -n /usr/bin/systemctl start|stop do-otelcol.service`  
    (`-n` = non-interactive: fail if a password would be required.)
 
-2. **Packaging** — [`packaging/scripts/after_install.sh`](packaging/scripts/after_install.sh) installs **`/etc/sudoers.d/do-obsd`**: passwordless `sudo` **only** for those `systemctl` commands as user `do-obsd`.  
+2. **Packaging** — [`packaging/scripts/after_install.sh`](packaging/scripts/after_install.sh) (`configure_sudoers`) installs **`/etc/sudoers.d/do-obsd`**: passwordless `sudo` **only** for those `systemctl` commands as user `do-obsd`.  
    [`packaging/scripts/after_remove.sh`](packaging/scripts/after_remove.sh) removes that file on package purge.
 
-3. **Manual testing** — Until a **released** `do-obsd` package contains both the new binary and the post-install step, you can copy [`packaging/scripts/do-obsd.sudoers`](packaging/scripts/do-obsd.sudoers) to `/etc/sudoers.d/do-obsd` and replace `/opt/digitalocean/bin/do-obsd` with a local `linux/amd64` build (see below). After the pipeline publishes an updated `.deb`, a normal `install.sh` / `apt install` applies this without extra steps.
+3. **Manual setup (before the CDN has a new package)** — Use the commands under **Hotfix** below; they match `configure_sudoers` in `after_install.sh` and replace the supervisor binary. After a new `.deb` is published, `install.sh` / `apt install` applies this without those steps.
 
 **Check that both services are up:**
 
@@ -68,15 +64,19 @@ sudo systemctl restart do-obsd
 
 ### Hotfix before a new package is published (GPU / strict polkit images)
 
-Use the same sudoers file the package will install and a locally built supervisor binary:
+Build a **linux/amd64** supervisor, copy it to the Droplet, then create **`/etc/sudoers.d/do-obsd`** with the same rules as **`configure_sudoers`** in [`after_install.sh`](packaging/scripts/after_install.sh) (if you change the rules in one place, update the other):
 
 ```bash
-# On your machine (linux/amd64 binary for Droplets)
+# On your machine
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/do-obsd-linux-amd64 ./cmd/do-obsd
-scp packaging/scripts/do-obsd.sudoers bin/do-obsd-linux-amd64 root@YOUR_DROPLET_IP:/root/
+scp bin/do-obsd-linux-amd64 root@YOUR_DROPLET_IP:/root/
 
 # On the Droplet (as root)
-install -m 440 /root/do-obsd.sudoers /etc/sudoers.d/do-obsd
+tee /etc/sudoers.d/do-obsd >/dev/null <<'EOF'
+# Managed by do-obsd package — allow supervisor to start/stop the collector without TTY auth.
+do-obsd ALL=(root) NOPASSWD: /usr/bin/systemctl start do-otelcol.service, /usr/bin/systemctl stop do-otelcol.service, /usr/bin/systemctl restart do-otelcol.service, /usr/bin/systemctl reload do-otelcol.service
+EOF
+chmod 440 /etc/sudoers.d/do-obsd
 visudo -cf /etc/sudoers.d/do-obsd
 install -m 755 /root/do-obsd-linux-amd64 /opt/digitalocean/bin/do-obsd
 systemctl restart do-obsd
