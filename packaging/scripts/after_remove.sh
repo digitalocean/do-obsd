@@ -6,7 +6,6 @@ set -ue
 SVC_NAME=do-obsd
 OTELCOL_SVC_NAME=do-otelcol
 OTELCOL_CONFIG_DIR=/etc/${OTELCOL_SVC_NAME}
-POLKIT_RULES=/etc/polkit-1/rules.d/60-${SVC_NAME}.rules
 SUDOERS_DROPIN=/etc/sudoers.d/${SVC_NAME}
 CRON_SCHEDULE=/etc/cron.hourly
 CRON=${CRON_SCHEDULE}/${SVC_NAME}
@@ -48,7 +47,6 @@ clean_systemd() {
 
 clean_resources() {
 	echo "Removing users and configuration"
-	rm -f "${POLKIT_RULES}"
 	rm -f "${SUDOERS_DROPIN}"
 	rm -rf "${OTELCOL_CONFIG_DIR}"
 	userdel ${OTELCOL_SVC_NAME} 2>/dev/null || true
