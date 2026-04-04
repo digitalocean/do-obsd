@@ -18,6 +18,21 @@ func TestCollectorServiceUnitName(t *testing.T) {
 	}
 }
 
+// TestSudoBinPath and TestSystemctlBinPath guard the absolute paths used in the sudo invocation.
+// The sudoers drop-in installed by after_install.sh grants access by exact path — a relative or
+// wrong path silently breaks privilege escalation at runtime without a compile-time signal.
+func TestSudoBinPath(t *testing.T) {
+	if sudoBin != "/usr/bin/sudo" {
+		t.Fatalf("sudoBin = %q, want /usr/bin/sudo — must match path in packaging/scripts/after_install.sh sudoers rule", sudoBin)
+	}
+}
+
+func TestSystemctlBinPath(t *testing.T) {
+	if systemctlBin != "/usr/bin/systemctl" {
+		t.Fatalf("systemctlBin = %q, want /usr/bin/systemctl — must match path in packaging/scripts/after_install.sh sudoers rule", systemctlBin)
+	}
+}
+
 func TestInstall(t *testing.T) {
 	type args struct {
 		os  *MockosOperator
