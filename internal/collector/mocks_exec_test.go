@@ -10,6 +10,7 @@
 package collector
 
 import (
+	context "context"
 	reflect "reflect"
 
 	gomock "go.uber.org/mock/gomock"
@@ -40,9 +41,9 @@ func (m *MockcmdRunner) EXPECT() *MockcmdRunnerMockRecorder {
 }
 
 // Run mocks base method.
-func (m *MockcmdRunner) Run(name string, args ...string) ([]byte, error) {
+func (m *MockcmdRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{name}
+	varargs := []any{ctx, name}
 	for _, a := range args {
 		varargs = append(varargs, a)
 	}
@@ -53,8 +54,8 @@ func (m *MockcmdRunner) Run(name string, args ...string) ([]byte, error) {
 }
 
 // Run indicates an expected call of Run.
-func (mr *MockcmdRunnerMockRecorder) Run(name any, args ...any) *gomock.Call {
+func (mr *MockcmdRunnerMockRecorder) Run(ctx, name any, args ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{name}, args...)
+	varargs := append([]any{ctx, name}, args...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Run", reflect.TypeOf((*MockcmdRunner)(nil).Run), varargs...)
 }

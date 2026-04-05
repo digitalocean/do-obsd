@@ -1,6 +1,7 @@
 package collector
 
 import (
+	"context"
 	"errors"
 	"io"
 	"os"
@@ -109,7 +110,7 @@ func TestStart(t *testing.T) {
 		{
 			name: "happy path",
 			expects: func(cmd *MockcmdRunner) error {
-				cmd.EXPECT().Run(sudoBin, "-n", systemctlBin, "start", CollectorService).Return(nil, nil)
+				cmd.EXPECT().Run(gomock.Any(), sudoBin, "-n", systemctlBin, "start", CollectorService).Return(nil, nil)
 				return nil
 			},
 		},
@@ -117,7 +118,7 @@ func TestStart(t *testing.T) {
 			name: "systemctl fails",
 			expects: func(cmd *MockcmdRunner) error {
 				cmdErr := errors.New("exit status 1")
-				cmd.EXPECT().Run(sudoBin, "-n", systemctlBin, "start", CollectorService).Return([]byte("failed"), cmdErr)
+				cmd.EXPECT().Run(gomock.Any(), sudoBin, "-n", systemctlBin, "start", CollectorService).Return([]byte("failed"), cmdErr)
 				return cmdErr
 			},
 		},
@@ -132,7 +133,7 @@ func TestStart(t *testing.T) {
 			c := &Collector{os: nil, cmd: mockCmd}
 			expectedErr := tt.expects(mockCmd)
 
-			err := c.Start()
+			err := c.Start(context.Background())
 
 			if !errors.Is(err, expectedErr) {
 				t.Fatalf("expected error %v, got %v", expectedErr, err)
@@ -149,7 +150,7 @@ func TestRestart(t *testing.T) {
 		{
 			name: "happy path",
 			expects: func(cmd *MockcmdRunner) error {
-				cmd.EXPECT().Run(sudoBin, "-n", systemctlBin, "restart", CollectorService).Return(nil, nil)
+				cmd.EXPECT().Run(gomock.Any(), sudoBin, "-n", systemctlBin, "restart", CollectorService).Return(nil, nil)
 				return nil
 			},
 		},
@@ -157,7 +158,7 @@ func TestRestart(t *testing.T) {
 			name: "systemctl fails",
 			expects: func(cmd *MockcmdRunner) error {
 				cmdErr := errors.New("exit status 1")
-				cmd.EXPECT().Run(sudoBin, "-n", systemctlBin, "restart", CollectorService).Return([]byte("failed"), cmdErr)
+				cmd.EXPECT().Run(gomock.Any(), sudoBin, "-n", systemctlBin, "restart", CollectorService).Return([]byte("failed"), cmdErr)
 				return cmdErr
 			},
 		},
@@ -172,7 +173,7 @@ func TestRestart(t *testing.T) {
 			c := &Collector{os: nil, cmd: mockCmd}
 			expectedErr := tt.expects(mockCmd)
 
-			err := c.Restart()
+			err := c.Restart(context.Background())
 
 			if !errors.Is(err, expectedErr) {
 				t.Fatalf("expected error %v, got %v", expectedErr, err)
@@ -189,7 +190,7 @@ func TestStop(t *testing.T) {
 		{
 			name: "happy path",
 			expects: func(cmd *MockcmdRunner) error {
-				cmd.EXPECT().Run(sudoBin, "-n", systemctlBin, "stop", CollectorService).Return(nil, nil)
+				cmd.EXPECT().Run(gomock.Any(), sudoBin, "-n", systemctlBin, "stop", CollectorService).Return(nil, nil)
 				return nil
 			},
 		},
@@ -197,7 +198,7 @@ func TestStop(t *testing.T) {
 			name: "systemctl fails",
 			expects: func(cmd *MockcmdRunner) error {
 				cmdErr := errors.New("exit status 1")
-				cmd.EXPECT().Run(sudoBin, "-n", systemctlBin, "stop", CollectorService).Return([]byte("failed"), cmdErr)
+				cmd.EXPECT().Run(gomock.Any(), sudoBin, "-n", systemctlBin, "stop", CollectorService).Return([]byte("failed"), cmdErr)
 				return cmdErr
 			},
 		},
@@ -212,7 +213,7 @@ func TestStop(t *testing.T) {
 			c := &Collector{os: nil, cmd: mockCmd}
 			expectedErr := tt.expects(mockCmd)
 
-			err := c.Stop()
+			err := c.Stop(context.Background())
 
 			if !errors.Is(err, expectedErr) {
 				t.Fatalf("expected error %v, got %v", expectedErr, err)

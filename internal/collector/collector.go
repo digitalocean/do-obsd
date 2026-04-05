@@ -1,6 +1,7 @@
 package collector
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -67,9 +68,9 @@ func (c *Collector) Install() error {
 }
 
 // Start starts do-otelcol.service via systemctl.
-func (c *Collector) Start() error {
+func (c *Collector) Start(ctx context.Context) error {
 	slog.Info("starting collector", "service", CollectorService)
-	out, err := c.cmd.Run(sudoBin, "-n", systemctlBin, "start", CollectorService)
+	out, err := c.cmd.Run(ctx, sudoBin, "-n", systemctlBin, "start", CollectorService)
 	if err != nil {
 		return fmt.Errorf("systemctl start %s: %w (output: %s)", CollectorService, err, out)
 	}
@@ -77,9 +78,9 @@ func (c *Collector) Start() error {
 }
 
 // Restart restarts do-otelcol.service via systemctl.
-func (c *Collector) Restart() error {
+func (c *Collector) Restart(ctx context.Context) error {
 	slog.Info("restarting collector", "service", CollectorService)
-	out, err := c.cmd.Run(sudoBin, "-n", systemctlBin, "restart", CollectorService)
+	out, err := c.cmd.Run(ctx, sudoBin, "-n", systemctlBin, "restart", CollectorService)
 	if err != nil {
 		return fmt.Errorf("systemctl restart %s: %w (output: %s)", CollectorService, err, out)
 	}
@@ -87,9 +88,9 @@ func (c *Collector) Restart() error {
 }
 
 // Stop stops do-otelcol.service via systemctl.
-func (c *Collector) Stop() error {
+func (c *Collector) Stop(ctx context.Context) error {
 	slog.Info("stopping collector", "service", CollectorService)
-	out, err := c.cmd.Run(sudoBin, "-n", systemctlBin, "stop", CollectorService)
+	out, err := c.cmd.Run(ctx, sudoBin, "-n", systemctlBin, "stop", CollectorService)
 	if err != nil {
 		return fmt.Errorf("systemctl stop %s: %w (output: %s)", CollectorService, err, out)
 	}

@@ -2,7 +2,10 @@ package collector
 
 //go:generate go tool mockgen -source=exec.go -package=collector -destination=mocks_exec_test.go
 
-import "os/exec"
+import (
+	"context"
+	"os/exec"
+)
 
 const (
 	// sudoBin and systemctlBin must match the paths in packaging/scripts/after_install.sh sudoers rule.
@@ -10,13 +13,13 @@ const (
 	systemctlBin = "/usr/bin/systemctl"
 )
 
-// cmdRunner abstracts exec.Command for testability.
+// cmdRunner abstracts exec.CommandContext for testability.
 type cmdRunner interface {
-	Run(name string, args ...string) ([]byte, error)
+	Run(ctx context.Context, name string, args ...string) ([]byte, error)
 }
 
 type realCmdRunner struct{}
 
-func (r *realCmdRunner) Run(name string, args ...string) ([]byte, error) {
-	return exec.Command(name, args...).CombinedOutput() //nolint:gosec
+func (r *realCmdRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	return exec.CommandContext(ctx, name, args...).CombinedOutput() //nolint:gosec
 }
