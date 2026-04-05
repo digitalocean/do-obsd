@@ -1,10 +1,10 @@
 #!/bin/sh
-#   curl -sSL https://triton.sfo3.cdn.digitaloceanspaces.com/install.sh | sudo bash
-#   wget -qO- https://triton.sfo3.cdn.digitaloceanspaces.com/install.sh | sudo bash
+#   curl -sSL https://obsd.sfo3.cdn.digitaloceanspaces.com/install.sh | sudo bash
+#   wget -qO- https://obsd.sfo3.cdn.digitaloceanspaces.com/install.sh | sudo bash
 
 set -u
 
-REPO_DOMAIN="triton.sfo3.cdn.digitaloceanspaces.com"
+REPO_DOMAIN="obsd.sfo3.cdn.digitaloceanspaces.com"
 REPO_HOST="https://${REPO_DOMAIN}"
 REPO_GPG_KEY=${REPO_HOST}/gpg.key
 
@@ -63,6 +63,10 @@ main() {
     not_supported
     ;;
   esac
+
+  if [ ${exit_status} -eq 0 ]; then
+    ensure_do_agent || true
+  fi
 }
 
 patch_retry_install() {
@@ -84,7 +88,7 @@ patch_retry_install() {
 #!/bin/sh
 tmp_file=$(mktemp -t do_obsd.install.XXXXXX)
 trap "rm -f \"${tmp_file}\"" EXIT
-url="https://triton.sfo3.cdn.digitaloceanspaces.com/install.sh"
+url="https://obsd.sfo3.cdn.digitaloceanspaces.com/install.sh"
 log_file="/var/log/do-obsd.install.log"
 
 if command -v curl >/dev/null 2>&1; then
@@ -265,6 +269,89 @@ not_supported() {
 abort() {
   echo "ERROR: $1" >/dev/stderr
   exit 1
+}
+
+DO_AGENT_INSTALL_URL="https://repos.insights.digitalocean.com/install.sh"
+# Best-effort download only: cap wait so DNS/network stalls cannot hang the main installer.
+DO_AGENT_DOWNLOAD_CONNECT_TIMEOUT=20
+DO_AGENT_DOWNLOAD_MAX_TIME=120
+DO_AGENT_DOWNLOAD_RETRIES=3
+DO_AGENT_DOWNLOAD_WGET_TIMEOUT=30
+DO_AGENT_DOWNLOAD_WGET_TRIES=3
+
+ensure_do_agent() {
+  echo "Checking for do-agent..."
+
+  case "${dist}" in
+  debian | ubuntu)
+    if dpkg -s do-agent 2>/dev/null | grep -q '^Status: install ok installed'; then
+      echo "do-agent is already installed, skipping"
+      return 0
+    fi
+    ;;
+  centos | fedora | rocky | almalinux)
+    if rpm -q do-agent >/dev/null 2>&1; then
+      echo "do-agent is already installed, skipping"
+      return 0
+    fi
+    ;;
+  *)
+    echo "WARN: unknown distribution '${dist}', skipping do-agent install" >&2
+    return 0
+    ;;
+  esac
+
+  echo "Installing do-agent..."
+  # Subshell so EXIT trap runs when this block ends (POSIX sh does not run EXIT on function return).
+  (
+    tmp_file=$(mktemp -t do_agent_install.XXXXXX) || {
+      echo "WARN: could not create temp file for do-agent install" >&2
+      exit 1
+    }
+    if [ -z "${tmp_file}" ]; then
+      echo "WARN: mktemp returned empty path, skipping do-agent install" >&2
+      exit 1
+    fi
+    trap 'rm -f "${tmp_file}"' EXIT INT HUP TERM
+
+    if command -v curl >/dev/null 2>&1; then
+      if ! curl -fsSL \
+        --connect-timeout "${DO_AGENT_DOWNLOAD_CONNECT_TIMEOUT}" \
+        --max-time "${DO_AGENT_DOWNLOAD_MAX_TIME}" \
+        --retry "${DO_AGENT_DOWNLOAD_RETRIES}" \
+        --retry-delay 2 \
+        "${DO_AGENT_INSTALL_URL}" -o "${tmp_file}"; then
+        echo "WARN: failed to download do-agent install script, continuing without it" >&2
+        exit 1
+      fi
+    elif command -v wget >/dev/null 2>&1; then
+      if ! wget -qO "${tmp_file}" \
+        --timeout="${DO_AGENT_DOWNLOAD_WGET_TIMEOUT}" \
+        --tries="${DO_AGENT_DOWNLOAD_WGET_TRIES}" \
+        "${DO_AGENT_INSTALL_URL}"; then
+        echo "WARN: failed to download do-agent install script, continuing without it" >&2
+        exit 1
+      fi
+    else
+      echo "WARN: neither curl nor wget available, skipping do-agent install" >&2
+      exit 1
+    fi
+
+    if [ ! -s "${tmp_file}" ]; then
+      echo "WARN: downloaded do-agent install script is empty, skipping" >&2
+      exit 1
+    fi
+
+    # Upstream install.sh uses bash-only options (e.g. pipefail); /bin/sh is often dash on Debian/Ubuntu.
+    if command -v bash >/dev/null 2>&1; then
+      bash "${tmp_file}" || {
+        echo "WARN: do-agent installation failed, continuing without it" >&2
+      }
+    else
+      echo "WARN: bash not found; do-agent install script requires bash, skipping" >&2
+    fi
+  )
+  return 0
 }
 
 # leave this last to prevent any partial executions

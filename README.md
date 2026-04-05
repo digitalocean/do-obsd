@@ -6,7 +6,7 @@ DigitalOcean observability supervisor. Manages the lifecycle of the OpenTelemetr
 
 `do-obsd` is a lightweight Go daemon that:
 - Installs the collector binary at startup (OpAMP binary delivery path)
-- Starts and stops `do-otelcol.service` via systemd
+- Starts and stops `do-otelcol.service` via systemd using least-privilege `sudo` (scoped to `do-otelcol.service` only — see `configure_sudoers` in `packaging/scripts/after_install.sh`)
 - Runs as an isolated `do-obsd` system user; collector runs as `do-otelcol`
 
 ## Development
