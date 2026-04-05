@@ -14,8 +14,8 @@ import (
 
 // TestCollectorServiceUnitName guards the systemd unit managed via sudo (packaging sudoers allows only this unit).
 func TestCollectorServiceUnitName(t *testing.T) {
-	if CollectorService != "do-otelcol.service" {
-		t.Fatalf("CollectorService = %q, want do-otelcol.service", CollectorService)
+	if collectorService != "do-otelcol.service" {
+		t.Fatalf("collectorService = %q, want do-otelcol.service", collectorService)
 	}
 }
 
@@ -47,13 +47,13 @@ func TestInstall(t *testing.T) {
 		{
 			name: "happy path",
 			expects: func(a *args) error {
-				a.os.EXPECT().Open(BundlePath).Return(io.NopCloser(strings.NewReader("binary")), nil)
-				a.os.EXPECT().CreateTemp(filepath.Dir(CollectorBin), gomock.Any()).Return(a.tmp, nil)
+				a.os.EXPECT().Open(bundlePath).Return(io.NopCloser(strings.NewReader("binary")), nil)
+				a.os.EXPECT().CreateTemp(filepath.Dir(collectorBin), gomock.Any()).Return(a.tmp, nil)
 				a.tmp.EXPECT().Name().Return("/tmp/.do-otelcol-test").AnyTimes()
 				a.tmp.EXPECT().Write(gomock.Any()).Return(6, nil)
 				a.tmp.EXPECT().Chmod(os.FileMode(0755)).Return(nil)
 				a.tmp.EXPECT().Close().Return(nil)
-				a.os.EXPECT().Rename("/tmp/.do-otelcol-test", CollectorBin).Return(nil)
+				a.os.EXPECT().Rename("/tmp/.do-otelcol-test", collectorBin).Return(nil)
 				a.os.EXPECT().Remove("/tmp/.do-otelcol-test").Return(nil)
 				return nil
 			},
@@ -61,7 +61,7 @@ func TestInstall(t *testing.T) {
 		{
 			name: "bundle not found",
 			expects: func(a *args) error {
-				a.os.EXPECT().Open(BundlePath).Return(nil, os.ErrNotExist)
+				a.os.EXPECT().Open(bundlePath).Return(nil, os.ErrNotExist)
 				return os.ErrNotExist
 			},
 		},
@@ -69,13 +69,13 @@ func TestInstall(t *testing.T) {
 			name: "rename fails",
 			expects: func(a *args) error {
 				renameErr := errors.New("cross-device link")
-				a.os.EXPECT().Open(BundlePath).Return(io.NopCloser(strings.NewReader("binary")), nil)
-				a.os.EXPECT().CreateTemp(filepath.Dir(CollectorBin), gomock.Any()).Return(a.tmp, nil)
+				a.os.EXPECT().Open(bundlePath).Return(io.NopCloser(strings.NewReader("binary")), nil)
+				a.os.EXPECT().CreateTemp(filepath.Dir(collectorBin), gomock.Any()).Return(a.tmp, nil)
 				a.tmp.EXPECT().Name().Return("/tmp/.do-otelcol-test").AnyTimes()
 				a.tmp.EXPECT().Write(gomock.Any()).Return(6, nil)
 				a.tmp.EXPECT().Chmod(os.FileMode(0755)).Return(nil)
 				a.tmp.EXPECT().Close().Return(nil)
-				a.os.EXPECT().Rename("/tmp/.do-otelcol-test", CollectorBin).Return(renameErr)
+				a.os.EXPECT().Rename("/tmp/.do-otelcol-test", collectorBin).Return(renameErr)
 				a.os.EXPECT().Remove("/tmp/.do-otelcol-test").Return(nil)
 				return renameErr
 			},
@@ -110,7 +110,7 @@ func TestStart(t *testing.T) {
 		{
 			name: "happy path",
 			expects: func(cmd *MockcmdRunner) error {
-				cmd.EXPECT().Run(gomock.Any(), sudoBin, "-n", systemctlBin, "start", CollectorService).Return(nil, nil)
+				cmd.EXPECT().Run(gomock.Any(), sudoBin, "-n", systemctlBin, "start", collectorService).Return(nil, nil)
 				return nil
 			},
 		},
@@ -118,7 +118,7 @@ func TestStart(t *testing.T) {
 			name: "systemctl fails",
 			expects: func(cmd *MockcmdRunner) error {
 				cmdErr := errors.New("exit status 1")
-				cmd.EXPECT().Run(gomock.Any(), sudoBin, "-n", systemctlBin, "start", CollectorService).Return([]byte("failed"), cmdErr)
+				cmd.EXPECT().Run(gomock.Any(), sudoBin, "-n", systemctlBin, "start", collectorService).Return([]byte("failed"), cmdErr)
 				return cmdErr
 			},
 		},
@@ -150,7 +150,7 @@ func TestRestart(t *testing.T) {
 		{
 			name: "happy path",
 			expects: func(cmd *MockcmdRunner) error {
-				cmd.EXPECT().Run(gomock.Any(), sudoBin, "-n", systemctlBin, "restart", CollectorService).Return(nil, nil)
+				cmd.EXPECT().Run(gomock.Any(), sudoBin, "-n", systemctlBin, "restart", collectorService).Return(nil, nil)
 				return nil
 			},
 		},
@@ -158,7 +158,7 @@ func TestRestart(t *testing.T) {
 			name: "systemctl fails",
 			expects: func(cmd *MockcmdRunner) error {
 				cmdErr := errors.New("exit status 1")
-				cmd.EXPECT().Run(gomock.Any(), sudoBin, "-n", systemctlBin, "restart", CollectorService).Return([]byte("failed"), cmdErr)
+				cmd.EXPECT().Run(gomock.Any(), sudoBin, "-n", systemctlBin, "restart", collectorService).Return([]byte("failed"), cmdErr)
 				return cmdErr
 			},
 		},
@@ -190,7 +190,7 @@ func TestStop(t *testing.T) {
 		{
 			name: "happy path",
 			expects: func(cmd *MockcmdRunner) error {
-				cmd.EXPECT().Run(gomock.Any(), sudoBin, "-n", systemctlBin, "stop", CollectorService).Return(nil, nil)
+				cmd.EXPECT().Run(gomock.Any(), sudoBin, "-n", systemctlBin, "stop", collectorService).Return(nil, nil)
 				return nil
 			},
 		},
@@ -198,7 +198,7 @@ func TestStop(t *testing.T) {
 			name: "systemctl fails",
 			expects: func(cmd *MockcmdRunner) error {
 				cmdErr := errors.New("exit status 1")
-				cmd.EXPECT().Run(gomock.Any(), sudoBin, "-n", systemctlBin, "stop", CollectorService).Return([]byte("failed"), cmdErr)
+				cmd.EXPECT().Run(gomock.Any(), sudoBin, "-n", systemctlBin, "stop", collectorService).Return([]byte("failed"), cmdErr)
 				return cmdErr
 			},
 		},
