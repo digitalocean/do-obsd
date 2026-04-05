@@ -8,6 +8,15 @@ User=do-obsd
 ExecStart=/opt/digitalocean/bin/do-obsd
 Restart=on-failure
 RestartSec=5s
+TimeoutStopSec=30s
+WorkingDirectory=/opt/digitalocean
+StandardOutput=journal
+StandardError=journal
+
+# do-obsd invokes sudo to manage do-otelcol.service, which requires setuid execution.
+# NoNewPrivileges=true would block sudo and cannot be used here.
+ProtectHome=true
+PrivateTmp=true
 
 [Install]
 WantedBy=multi-user.target
