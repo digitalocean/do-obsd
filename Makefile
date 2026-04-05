@@ -4,7 +4,7 @@ shellcheck = docker run --rm \
 	-v "$(CURDIR):$(CURDIR)" \
 	-w "$(CURDIR)" \
 	-u $(shell id -u) \
-	koalaman/shellcheck:latest
+	koalaman/shellcheck:v0.11.0
 
 linter = docker run --rm \
 	-v "$(CURDIR):$(CURDIR)" \
@@ -20,7 +20,7 @@ mockgen = go tool mockgen
 
 build:
 	$(print)
-	CGO_ENABLED=0 go build -o bin/do-obsd ./cmd/do-obsd
+	CGO_ENABLED=0 go build -ldflags "-X main.version=$(shell git describe --tags --always --dirty)" -o bin/do-obsd ./cmd/do-obsd
 
 test:
 	$(print)
@@ -33,4 +33,5 @@ lint:
 
 mocks:
 	$(print)
-	$(mockgen) -source=internal/collector/collector.go -package=collector -destination=internal/collector/mocks_test.go
+	$(mockgen) -source=internal/collector/os.go -package=collector -destination=internal/collector/mocks_os_test.go
+	$(mockgen) -source=internal/collector/exec.go -package=collector -destination=internal/collector/mocks_exec_test.go
