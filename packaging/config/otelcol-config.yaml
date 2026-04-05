@@ -11,5 +11,5 @@ exporters:
 service:
   pipelines:
     logs:
-      receivers: [filelog/kern]
+      receivers: [journald]
       exporters: [debug]
