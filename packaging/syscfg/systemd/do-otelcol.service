@@ -10,6 +10,16 @@ ExecStart=/opt/digitalocean/bin/do-otelcol --config=/etc/do-otelcol/config.yaml
 Restart=on-failure
 RestartSec=5s
 MemoryMax=256M
+TimeoutStopSec=30s
+WorkingDirectory=/opt/digitalocean
+StandardOutput=journal
+StandardError=journal
+
+NoNewPrivileges=true
+ProtectHome=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadOnlyPaths=/etc/do-otelcol
 
 [Install]
 WantedBy=multi-user.target
