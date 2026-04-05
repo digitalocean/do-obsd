@@ -15,8 +15,15 @@ jobs:
           go-version-file: go.mod
       - uses: golangci/golangci-lint-action@v9
         with:
-          version: latest
+          version: v2.11.4
       - name: shellcheck
         run: |
-          sudo apt-get install -y shellcheck
-          find . -name "*.sh" | xargs shellcheck
+          docker run --rm \
+            -v "${{ github.workspace }}:${{ github.workspace }}" \
+            -w "${{ github.workspace }}" \
+            koalaman/shellcheck:v0.11.0 \
+            $(find . -name "*.sh" ! -path "./vendor/*")
+      - name: vendor consistency
+        run: |
+          go mod vendor
+          git diff --exit-code vendor/

@@ -4,7 +4,7 @@ shellcheck = docker run --rm \
 	-v "$(CURDIR):$(CURDIR)" \
 	-w "$(CURDIR)" \
 	-u $(shell id -u) \
-	koalaman/shellcheck:latest
+	koalaman/shellcheck:v0.11.0
 
 linter = docker run --rm \
 	-v "$(CURDIR):$(CURDIR)" \
