@@ -85,19 +85,22 @@ prepare() {
   echo "Local Version:${LOCAL_VER}"
 }
 
+fetch_url() {
+  if command -v curl >/dev/null 2>&1; then
+    curl -sSL "$1"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -qO- "$1"
+  else
+    abort "neither curl nor wget found"
+  fi
+}
+
 find_latest_pkg() {
   platform=${1:-}
   [ -z "${platform}" ] && abort "Destination repository is required. Usage: find_latest_pkg <platform>"
 
   echo "Checking Latest Version..."
-  case "${platform}" in
-  rpm)
-    repo_tree=$(curl -sSL "${REPO_HOST}")
-    ;;
-  deb)
-    repo_tree=$(wget -qO- "${REPO_HOST}")
-    ;;
-  esac
+  repo_tree=$(fetch_url "${REPO_HOST}")
   files=$(printf '%s\n' "${repo_tree}" | sed -n 's/.*Key>\([^<]*\)<.*/\1/p' | grep -F "${PKG_PATTERN}" | tr ' ' '\n')
   sorted_files=$(printf '%s\n' "${files}" | sort -V)
   LATEST_VER=$(printf '%s\n' "${sorted_files}" | tail -n 1 | sed -n 's/.*\([0-9][0-9A-Za-z.~+-]*\).*/\1/p')
