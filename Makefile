@@ -20,7 +20,7 @@ mockgen = go tool mockgen
 
 build:
 	$(print)
-	CGO_ENABLED=0 go build -o bin/do-obsd ./cmd/do-obsd
+	CGO_ENABLED=0 go build -ldflags "-X main.version=$(shell git describe --tags --always --dirty)" -o bin/do-obsd ./cmd/do-obsd
 
 test:
 	$(print)

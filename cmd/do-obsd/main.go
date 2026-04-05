@@ -12,6 +12,8 @@ import (
 	"github.com/digitalocean/do-obsd/internal/collector"
 )
 
+var version = "dev"
+
 const stopTimeout = 30 * time.Second
 
 func main() {
@@ -24,7 +26,7 @@ func main() {
 }
 
 func run() error {
-	slog.Info("starting")
+	slog.Info("starting", "version", version)
 
 	col := collector.New()
 
