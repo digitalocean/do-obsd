@@ -141,6 +141,46 @@ func TestStart(t *testing.T) {
 	}
 }
 
+func TestRestart(t *testing.T) {
+	tests := []struct {
+		name    string
+		expects func(*MockcmdRunner) error
+	}{
+		{
+			name: "happy path",
+			expects: func(cmd *MockcmdRunner) error {
+				cmd.EXPECT().Run(sudoBin, "-n", systemctlBin, "restart", CollectorService).Return(nil, nil)
+				return nil
+			},
+		},
+		{
+			name: "systemctl fails",
+			expects: func(cmd *MockcmdRunner) error {
+				cmdErr := errors.New("exit status 1")
+				cmd.EXPECT().Run(sudoBin, "-n", systemctlBin, "restart", CollectorService).Return([]byte("failed"), cmdErr)
+				return cmdErr
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockCmd := NewMockcmdRunner(ctrl)
+			c := &Collector{os: nil, cmd: mockCmd}
+			expectedErr := tt.expects(mockCmd)
+
+			err := c.Restart()
+
+			if !errors.Is(err, expectedErr) {
+				t.Fatalf("expected error %v, got %v", expectedErr, err)
+			}
+		})
+	}
+}
+
 func TestStop(t *testing.T) {
 	tests := []struct {
 		name    string

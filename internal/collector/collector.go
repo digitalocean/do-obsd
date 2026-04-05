@@ -76,6 +76,16 @@ func (c *Collector) Start() error {
 	return nil
 }
 
+// Restart restarts do-otelcol.service via systemctl.
+func (c *Collector) Restart() error {
+	slog.Info("restarting collector", "service", CollectorService)
+	out, err := c.cmd.Run(sudoBin, "-n", systemctlBin, "restart", CollectorService)
+	if err != nil {
+		return fmt.Errorf("systemctl restart %s: %w (output: %s)", CollectorService, err, out)
+	}
+	return nil
+}
+
 // Stop stops do-otelcol.service via systemctl.
 func (c *Collector) Stop() error {
 	slog.Info("stopping collector", "service", CollectorService)
