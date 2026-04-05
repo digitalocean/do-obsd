@@ -33,4 +33,5 @@ lint:
 
 mocks:
 	$(print)
-	$(mockgen) -source=internal/collector/collector.go -package=collector -destination=internal/collector/mocks_test.go
+	$(mockgen) -source=internal/collector/os.go -package=collector -destination=internal/collector/mocks_os_test.go
+	$(mockgen) -source=internal/collector/exec.go -package=collector -destination=internal/collector/mocks_exec_test.go
