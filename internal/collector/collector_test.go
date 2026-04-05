@@ -11,6 +11,28 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
+// TestCollectorServiceUnitName guards the systemd unit managed via sudo (packaging sudoers allows only this unit).
+func TestCollectorServiceUnitName(t *testing.T) {
+	if CollectorService != "do-otelcol.service" {
+		t.Fatalf("CollectorService = %q, want do-otelcol.service", CollectorService)
+	}
+}
+
+// TestSudoBinPath and TestSystemctlBinPath guard the absolute paths used in the sudo invocation.
+// The sudoers drop-in installed by after_install.sh grants access by exact path — a relative or
+// wrong path silently breaks privilege escalation at runtime without a compile-time signal.
+func TestSudoBinPath(t *testing.T) {
+	if sudoBin != "/usr/bin/sudo" {
+		t.Fatalf("sudoBin = %q, want /usr/bin/sudo — must match path in packaging/scripts/after_install.sh sudoers rule", sudoBin)
+	}
+}
+
+func TestSystemctlBinPath(t *testing.T) {
+	if systemctlBin != "/usr/bin/systemctl" {
+		t.Fatalf("systemctlBin = %q, want /usr/bin/systemctl — must match path in packaging/scripts/after_install.sh sudoers rule", systemctlBin)
+	}
+}
+
 func TestInstall(t *testing.T) {
 	type args struct {
 		os  *MockosOperator
@@ -87,7 +109,7 @@ func TestStart(t *testing.T) {
 		{
 			name: "happy path",
 			expects: func(cmd *MockcmdRunner) error {
-				cmd.EXPECT().Run("systemctl", "start", CollectorService).Return(nil, nil)
+				cmd.EXPECT().Run(sudoBin, "-n", systemctlBin, "start", CollectorService).Return(nil, nil)
 				return nil
 			},
 		},
@@ -95,7 +117,7 @@ func TestStart(t *testing.T) {
 			name: "systemctl fails",
 			expects: func(cmd *MockcmdRunner) error {
 				cmdErr := errors.New("exit status 1")
-				cmd.EXPECT().Run("systemctl", "start", CollectorService).Return([]byte("failed"), cmdErr)
+				cmd.EXPECT().Run(sudoBin, "-n", systemctlBin, "start", CollectorService).Return([]byte("failed"), cmdErr)
 				return cmdErr
 			},
 		},
@@ -127,7 +149,7 @@ func TestStop(t *testing.T) {
 		{
 			name: "happy path",
 			expects: func(cmd *MockcmdRunner) error {
-				cmd.EXPECT().Run("systemctl", "stop", CollectorService).Return(nil, nil)
+				cmd.EXPECT().Run(sudoBin, "-n", systemctlBin, "stop", CollectorService).Return(nil, nil)
 				return nil
 			},
 		},
@@ -135,7 +157,7 @@ func TestStop(t *testing.T) {
 			name: "systemctl fails",
 			expects: func(cmd *MockcmdRunner) error {
 				cmdErr := errors.New("exit status 1")
-				cmd.EXPECT().Run("systemctl", "stop", CollectorService).Return([]byte("failed"), cmdErr)
+				cmd.EXPECT().Run(sudoBin, "-n", systemctlBin, "stop", CollectorService).Return([]byte("failed"), cmdErr)
 				return cmdErr
 			},
 		},
