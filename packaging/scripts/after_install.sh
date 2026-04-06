@@ -121,6 +121,8 @@ set_permissions() {
 }
 
 patch_updates() {
+	# Cleanup old scheduler locations to avoid duplicate execution after migrations.
+	rm -f "/etc/cron.d/${SVC_NAME}" "/etc/cron.hourly/${SVC_NAME}" "/etc/cron.daily/${SVC_NAME}" "/etc/cron.minute/${SVC_NAME}" || true
 	[ -f "${CRON}" ] && rm -f "${CRON}"
 	script="${INSTALL_DIR}/scripts/update.sh"
 	mkdir -p ${CRON_SCHEDULE}
@@ -130,7 +132,7 @@ patch_updates() {
 	/bin/bash ${script} >/var/log/${SVC_NAME}.update.log 2>&1
 	EOF
 
-	chmod +x "${CRON}"
+	chmod 0755 "${CRON}"
 }
 
 # configure_sudoers grants the do-obsd service user the ability to start, stop, and restart

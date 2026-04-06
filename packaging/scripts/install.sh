@@ -7,6 +7,7 @@ set -u
 REPO_DOMAIN="obsd.sfo3.cdn.digitaloceanspaces.com"
 REPO_HOST="https://${REPO_DOMAIN}"
 REPO_GPG_KEY=${REPO_HOST}/gpg.key
+INSTALL_SCRIPT_URL="${REPO_HOST}/install.sh"
 
 branch="do-obsd-preview"
 
@@ -26,7 +27,7 @@ main() {
   [ "$(id -u)" != "0" ] &&
     abort "This script must be executed as root."
 
-  trap 'exit_status=$?; script_cleanup; exit $exit_status' EXIT
+  trap 'script_cleanup; exit $exit_status' EXIT
 
   check_do
   check_dist
@@ -86,9 +87,9 @@ patch_retry_install() {
 
   cat <<'EOF' >"${RETRY_CRON}"
 #!/bin/sh
-tmp_file=$(mktemp -t do_obsd.install.XXXXXX)
-trap "rm -f \"${tmp_file}\"" EXIT
-url="https://obsd.sfo3.cdn.digitaloceanspaces.com/install.sh"
+tmp_file=\$(mktemp -t do_obsd.install.XXXXXX)
+trap "rm -f \"\${tmp_file}\"" EXIT
+url="${INSTALL_SCRIPT_URL}"
 log_file="/var/log/do-obsd.install.log"
 
 if command -v curl >/dev/null 2>&1; then
@@ -166,16 +167,19 @@ install_apt() (
 
   echo "Importing GPG public key"
   wget -qO- "${REPO_GPG_KEY}" | gpg --dearmor >"${deb_keyfile}"
-  echo "deb [signed-by=${deb_keyfile}] ${REPO_HOST}/apt/${branch} main main" >"${deb_list}"
+  # arch=amd64: repo is amd64-only; avoids apt multi-arch confusion on some images.
+  echo "deb [signed-by=${deb_keyfile} arch=amd64] ${REPO_HOST}/apt/${branch} main main" >"${deb_list}"
+  # Pin by Release Origin/Label/Codename (not the repo hostname — "origin" in apt prefs is
+  # the Origin: field from InRelease, which we publish as DigitalOcean / do-obsd).
   cat <<-EOF >${deb_pref}
 	Package: *
-	Pin: origin ${REPO_DOMAIN}
-	Pin-Priority: 100
+	Pin: release o=DigitalOcean,l=do-obsd,n=main
+	Pin-Priority: 500
 	EOF
 
   echo "Installing do-obsd"
-  apt-get -qq update
-  apt-get -qq --fix-missing install -y do-obsd
+  apt-get -q update
+  apt-get -q --fix-missing install -y do-obsd
 )
 
 install_yum() (

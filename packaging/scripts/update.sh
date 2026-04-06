@@ -1,17 +1,21 @@
 #!/bin/bash
 # vim: noexpandtab
+#
+# Auto-update do-obsd via the native package manager (apt / yum).
+# Intended to be invoked by cron; uses flock to prevent overlapping runs.
 
 set -ue
-
+#file used for process locking so only one updater runs at a time
+LOCK_FILE="/var/lock/do-obsd-update.lock"
 SVC_NAME="do-obsd"
-
-REPO_HOST=""
-PKG_PATTERN=""
 ARCH="x86_64"
-LATEST_VER="-"
 LOCAL_VER=""
+CANDIDATE_VER=""
+APT_RETRIES="5"
+APT_RETRY_DELAY="15"
 
 main() {
+  # Jitter: spread update checks across a 15-minute window.
   delay=$((RANDOM % 900))
   echo "Waiting ${delay} seconds"
   sleep ${delay}
@@ -19,39 +23,122 @@ main() {
   check_arch
   if command -v apt-get >/dev/null 2>&1; then
     platform="deb"
-    do_update=update_deb
   elif command -v yum >/dev/null 2>&1; then
     platform="rpm"
-    do_update=update_rpm
   else
     not_supported
   fi
-  prepare "${platform}"
-  find_latest_pkg "${platform}"
-  if [ "${LOCAL_VER}" = "${LATEST_VER}" ]; then
-    echo "No need to update"
+
+  refresh_index "${platform}"
+  resolve_versions "${platform}"
+
+  echo "Local version : ${LOCAL_VER}"
+  echo "Candidate     : ${CANDIDATE_VER}"
+
+  if [ "${LOCAL_VER}" = "${CANDIDATE_VER}" ]; then
+    echo "Already up-to-date"
     exit 0
   fi
-  ${do_update}
+
+  do_upgrade "${platform}"
+  echo "Upgrade complete — now at $(resolve_local_ver "${platform}")"
 }
 
-update_deb() {
-  echo "Updating ${SVC_NAME} deb package"
-  export DEBIAN_FRONTEND="noninteractive"
-  apt-get -qq update \
-    -o Dir::Etc::SourceParts=/dev/null \
-    -o APT::Get::List-Cleanup=no \
-    -o Dir::Etc::SourceList="sources.list.d/${SVC_NAME}.list"
-  apt-get \
-    -o Dpkg::Options::="--force-confdef" \
-    -o Dpkg::Options::="--force-confold" \
-    -qq install -y --only-upgrade ${SVC_NAME}
+# updates package metadata before version comparison/upgrades
+refresh_index() {
+  platform=${1:-}
+  echo "Refreshing package index..."
+  case "${platform}" in
+  deb)
+    export DEBIAN_FRONTEND="noninteractive"
+    run_apt_with_retry apt-get -qq update \
+      --allow-releaseinfo-change-suite \
+      --allow-releaseinfo-change-codename \
+      -o Dir::Etc::SourceParts=/dev/null \
+      -o APT::Get::List-Cleanup=no \
+      -o Dir::Etc::SourceList="sources.list.d/${SVC_NAME}.list"
+    ;;
+  rpm)
+    yum -q -y --disablerepo="*" --enablerepo="${SVC_NAME}" makecache
+    ;;
+  esac
 }
 
-update_rpm() {
-  echo "Updating ${SVC_NAME} rpm package"
-  yum -q -y --disablerepo="*" --enablerepo="${SVC_NAME}" makecache
-  yum -q -y update ${SVC_NAME}
+# ── Resolve installed + candidate versions from package manager ──────────────
+resolve_local_ver() {
+  platform=${1:-}
+  case "${platform}" in
+  deb) dpkg -s ${SVC_NAME} 2>/dev/null | awk '/^Version:/{print $2}' ;;
+  rpm) rpm -q ${SVC_NAME} --qf '%{VERSION}' 2>/dev/null ;;
+  esac
+}
+
+resolve_versions() {
+  platform=${1:-}
+  LOCAL_VER=$(resolve_local_ver "${platform}")
+  if [ -z "${LOCAL_VER}" ]; then
+    abort "Cannot determine installed version of ${SVC_NAME}"
+  fi
+
+  case "${platform}" in
+  deb)
+    CANDIDATE_VER=$(apt-cache policy ${SVC_NAME} | awk '/Candidate:/{print $2}')
+    ;;
+  rpm)
+    CANDIDATE_VER=$(yum -q --disablerepo="*" --enablerepo="${SVC_NAME}" list available ${SVC_NAME} 2>/dev/null \
+      | awk '/^do-obsd/{print $2}' | cut -d- -f1)
+    # If nothing available, candidate equals local (already latest).
+    [ -z "${CANDIDATE_VER}" ] && CANDIDATE_VER="${LOCAL_VER}"
+    ;;
+  esac
+
+  if [ -z "${CANDIDATE_VER}" ]; then
+    abort "Cannot determine candidate version of ${SVC_NAME}"
+  fi
+}
+
+# ── Perform upgrade ──────────────────────────────────────────────────────────
+do_upgrade() {
+  platform=${1:-}
+  echo "Upgrading ${SVC_NAME} ${LOCAL_VER} -> ${CANDIDATE_VER}"
+  case "${platform}" in
+  deb)
+    run_apt_with_retry apt-get \
+      -o Dpkg::Options::="--force-confdef" \
+      -o Dpkg::Options::="--force-confold" \
+      -qq install -y --only-upgrade ${SVC_NAME}
+    ;;
+  rpm)
+    yum -q -y update ${SVC_NAME}
+    ;;
+  esac
+}
+
+# ── Helpers ──────────────────────────────────────────────────────────────────
+run_apt_with_retry() {
+  _attempt=1
+  while [ "${_attempt}" -le "${APT_RETRIES}" ]; do
+    _tmp_log=$(mktemp)
+    if "$@" >"${_tmp_log}" 2>&1; then
+      cat "${_tmp_log}"
+      rm -f "${_tmp_log}"
+      return 0
+    fi
+
+    cat "${_tmp_log}" >&2
+    if grep -Eq 'Could not get lock|Unable to lock directory' "${_tmp_log}"; then
+      if [ "${_attempt}" -lt "${APT_RETRIES}" ]; then
+        echo "APT is locked by another process, retrying in ${APT_RETRY_DELAY}s (attempt ${_attempt}/${APT_RETRIES})"
+        rm -f "${_tmp_log}"
+        sleep "${APT_RETRY_DELAY}"
+        _attempt=$((_attempt + 1))
+        continue
+      fi
+    fi
+
+    rm -f "${_tmp_log}"
+    return 1
+  done
 }
 
 check_arch() {
@@ -60,48 +147,6 @@ check_arch() {
     not_supported
   fi
   echo "OK"
-}
-
-prepare() {
-  echo "Preparing to check for update"
-  platform=${1:-}
-  [ -z "${platform}" ] && abort "Destination repository is required. Usage: prepare <platform>"
-  case "${platform}" in
-  rpm)
-    LOCAL_VER=$(rpm -q ${SVC_NAME} --qf '%{VERSION}')
-    url=$(grep baseurl <"/etc/yum.repos.d/${SVC_NAME}.repo" | cut -f 2 -d=)
-    url=$(echo "${url}/${SVC_NAME}." | sed -e "s|\$basearch|${ARCH}|g")
-    ;;
-  deb)
-    LOCAL_VER=$(dpkg -s ${SVC_NAME} | grep Version | cut -f 2 -d: | tr -d '[:space:]')
-    url=$(cut -f 3 -d' ' <"/etc/apt/sources.list.d/${SVC_NAME}.list")
-    url="${url}/pool/main/main/d/${SVC_NAME}/${SVC_NAME}_"
-    ;;
-  esac
-  REPO_HOST=$(echo "${url}" | grep "/" | cut -d"/" -f1-3)
-  PKG_PATTERN=$(echo "${url}" | grep "/" | cut -d"/" -f4-)
-  echo "Package Host: ${REPO_HOST}"
-  echo "Package Path: ${PKG_PATTERN}"
-  echo "Local Version:${LOCAL_VER}"
-}
-
-find_latest_pkg() {
-  platform=${1:-}
-  [ -z "${platform}" ] && abort "Destination repository is required. Usage: find_latest_pkg <platform>"
-
-  echo "Checking Latest Version..."
-  case "${platform}" in
-  rpm)
-    repo_tree=$(curl -sSL "${REPO_HOST}")
-    ;;
-  deb)
-    repo_tree=$(wget -qO- "${REPO_HOST}")
-    ;;
-  esac
-  files=$(printf '%s\n' "${repo_tree}" | sed -n 's/.*Key>\([^<]*\)<.*/\1/p' | grep -F "${PKG_PATTERN}" | tr ' ' '\n')
-  sorted_files=$(printf '%s\n' "${files}" | sort -V)
-  LATEST_VER=$(printf '%s\n' "${sorted_files}" | tail -n 1 | sed -n 's/.*\([0-9][0-9A-Za-z.~+-]*\).*/\1/p')
-  echo "Latest package:${LATEST_VER}"
 }
 
 not_supported() {
@@ -119,4 +164,10 @@ abort() {
   exit 1
 }
 
+# ── Entry point: flock prevents overlapping runs ─────────────────────────────
+exec 200>"${LOCK_FILE}"
+if ! flock -n 200; then
+  echo "Another update is already running, exiting."
+  exit 0
+fi
 main

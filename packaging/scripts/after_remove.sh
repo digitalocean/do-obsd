@@ -34,6 +34,7 @@ main() {
 
 remove_cron() {
 	rm -fv "${CRON}"
+	rm -fv "/etc/cron.d/${SVC_NAME}" "/etc/cron.hourly/${SVC_NAME}" "/etc/cron.daily/${SVC_NAME}" "/etc/cron.minute/${SVC_NAME}" || true
 }
 
 clean_systemd() {
