@@ -1,8 +1,23 @@
+# Resource / backpressure guards for fleet Droplets (do-otelcol.service MemoryMax=256M):
+# - memory_limiter throttles intake before cgroup pressure; under sustained overload, data is dropped.
+# - batch caps batch size toward exporters.
+# OTLP-style exporters support sending_queue.queue_size and retry_on_failure.max_elapsed_time; do not
+# enable file_storage-backed queues without an explicit disk budget (unbounded spill risk).
 receivers:
   journald:
     units: []
     priority: info
     start_at: end
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 180
+    spike_limit_mib: 40
+  batch/logs:
+    send_batch_size: 1024
+    send_batch_max_size: 2048
+    timeout: 5s
 
 exporters:
   debug:
@@ -12,4 +27,5 @@ service:
   pipelines:
     logs:
       receivers: [journald]
+      processors: [memory_limiter, batch/logs]
       exporters: [debug]
