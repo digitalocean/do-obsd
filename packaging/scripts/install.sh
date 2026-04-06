@@ -85,7 +85,7 @@ patch_retry_install() {
     fi
   fi
 
-  cat <<'EOF' >"${RETRY_CRON}"
+  cat <<EOF >"${RETRY_CRON}"
 #!/bin/sh
 tmp_file=\$(mktemp -t do_obsd.install.XXXXXX)
 trap "rm -f \"\${tmp_file}\"" EXIT
@@ -93,26 +93,26 @@ url="${INSTALL_SCRIPT_URL}"
 log_file="/var/log/do-obsd.install.log"
 
 if command -v curl >/dev/null 2>&1; then
-  if ! curl -sSL "${url}" -o "${tmp_file}"; then
-    now=$(date +"%T")
-    echo "Retry at: ${now} - failed to download install script with curl" >> "${log_file}"
+  if ! curl -sSL "\${url}" -o "\${tmp_file}"; then
+    now=\$(date +"%T")
+    echo "Retry at: \${now} - failed to download install script with curl" >> "\${log_file}"
     exit 1
   fi
 elif command -v wget >/dev/null 2>&1; then
-  if ! wget -qO "${tmp_file}" "${url}"; then
-    now=$(date +"%T")
-    echo "Retry at: ${now} - failed to download install script with wget" >> "${log_file}"
+  if ! wget -qO "\${tmp_file}" "\${url}"; then
+    now=\$(date +"%T")
+    echo "Retry at: \${now} - failed to download install script with wget" >> "\${log_file}"
     exit 1
   fi
 else
-  now=$(date +"%T")
-  echo "Retry at: ${now} - neither curl nor wget is installed; cannot download install script" >> "${log_file}"
+  now=\$(date +"%T")
+  echo "Retry at: \${now} - neither curl nor wget is installed; cannot download install script" >> "\${log_file}"
   exit 1
 fi
 
-now=$(date +"%T")
-echo "Retry at: ${now}" >> "${log_file}"
-/bin/sh "${tmp_file}" >> "${log_file}" 2>&1
+now=\$(date +"%T")
+echo "Retry at: \${now}" >> "\${log_file}"
+/bin/sh "\${tmp_file}" >> "\${log_file}" 2>&1
 EOF
 
   chmod +x "${RETRY_CRON}"
