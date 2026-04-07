@@ -43,7 +43,7 @@ exporters:
       enabled: true
       max_elapsed_time: 120s
   debug:
-    verbosity: detailed
+    verbosity: basic
 
 service:
   pipelines:
