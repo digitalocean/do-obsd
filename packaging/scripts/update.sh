@@ -62,7 +62,7 @@ resolve_local_ver() {
   platform=${1:-}
   case "${platform}" in
   deb) dpkg -s ${SVC_NAME} 2>/dev/null | awk '/^Version:/{print $2}' ;;
-  rpm) rpm -q ${SVC_NAME} --qf '%{VERSION}' 2>/dev/null ;;
+  rpm) rpm -q ${SVC_NAME} --qf '%{EPOCH}:%{VERSION}-%{RELEASE}' 2>/dev/null ;;
   esac
 }
 
@@ -83,7 +83,7 @@ resolve_versions() {
     ;;
   rpm)
     CANDIDATE_VER=$(yum -q --disablerepo="*" --enablerepo="${SVC_NAME}" list available ${SVC_NAME} 2>/dev/null \
-      | awk '/^do-obsd/{print $2}' | cut -d- -f1)
+      | awk '/^do-obsd/{print $2}')
     # If nothing available, candidate equals local (already latest).
     [ -z "${CANDIDATE_VER}" ] && CANDIDATE_VER="${LOCAL_VER}"
     ;;
