@@ -87,7 +87,7 @@ main() {
 	set_permissions
 	configure_sudoers
 
-	systemctl daemon-reload
+	systemctl daemon-reload || true
 
 	# do-obsd manages do-otelcol lifecycle — it installs the binary and starts the service.
 	# do-otelcol.service is NOT enabled here; do-obsd starts it after binary placement.
