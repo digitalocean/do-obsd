@@ -153,7 +153,11 @@ is_candidate_newer() {
 run_apt_with_retry() {
   _attempt=1
   while [ "${_attempt}" -le "${APT_RETRIES}" ]; do
-    _tmp_log=$(mktemp)
+    _tmp_log=$(mktemp) || {
+      echo "ERROR: Failed to create temporary log file" >&2
+      return 1
+    }
+    
     if "$@" >"${_tmp_log}" 2>&1; then
       cat "${_tmp_log}"
       rm -f "${_tmp_log}"
