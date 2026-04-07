@@ -89,10 +89,10 @@ resolve_versions() {
     ;;
   rpm)
     # Use yum check-update to detect packages with available updates (includes installed pkgs).
-    # yum check-update output: package oldver -> newver [repo]. Extract newver and normalize epoch prefix.
-    # Account for architecture suffix (e.g., do-obsd.x86_64) by matching service name at start of package field.
+    # Standard yum check-update output is: package.arch  version  repo.
+    # Match the requested package field explicitly and extract the version column.
     CANDIDATE_VER=$(yum -q --disablerepo="*" --enablerepo="${SVC_NAME}" check-update ${SVC_NAME} 2>/dev/null \
-      | awk -v svc="${SVC_NAME}" '$1 ~ "^" svc {v=$NF; if(v !~ /^[0-9]+:/) v="0:"v; print v}' | head -1)
+      | awk -v svc="${SVC_NAME}" '($1 == svc || index($1, svc ".") == 1) {v=$2; if(v !~ /^[0-9]+:/) v="0:"v; print v}' | head -1)
     # If no update available, check-update returns nothing; set candidate to local (already latest).
     [ -z "${CANDIDATE_VER}" ] && CANDIDATE_VER="${LOCAL_VER}"
     ;;
