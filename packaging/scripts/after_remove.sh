@@ -46,6 +46,7 @@ clean_systemd() {
 	systemctl stop ${UPDATER_TIMER} || true
 	systemctl disable -f ${UPDATER_TIMER} || true
 	systemctl stop ${UPDATER_SVC} || true
+	systemctl disable -f ${UPDATER_SVC} || true
 	systemctl stop ${OTELCOL_SVC_NAME}.service || true
 	systemctl disable -f ${OTELCOL_SVC_NAME}.service || true
 	systemctl daemon-reload || true
