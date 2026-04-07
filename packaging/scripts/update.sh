@@ -68,7 +68,7 @@ resolve_local_ver() {
   platform=${1:-}
   case "${platform}" in
   deb) dpkg -s ${SVC_NAME} 2>/dev/null | awk '/^Version:/{print $2}' ;;
-  rpm) rpm -q ${SVC_NAME} --qf '%{EPOCH}:%{VERSION}-%{RELEASE}' 2>/dev/null ;;
+  rpm) rpm -q ${SVC_NAME} --qf '%{EPOCHNUM}:%{VERSION}-%{RELEASE}' 2>/dev/null ;;
   esac
 }
 
@@ -89,9 +89,9 @@ resolve_versions() {
     ;;
   rpm)
     # Use yum check-update to detect packages with available updates (includes installed pkgs).
-    # yum check-update returns installed_ver -> available_ver on a line matching the package name.
+    # yum check-update output: package oldver -> newver [repo]. Extract newver and normalize epoch prefix.
     CANDIDATE_VER=$(yum -q --disablerepo="*" --enablerepo="${SVC_NAME}" check-update ${SVC_NAME} 2>/dev/null \
-      | awk '/^do-obsd/{print $3}' | head -1)
+      | awk '/^do-obsd/ {v=$NF; if(v !~ /^[0-9]+:/) v="0:"v; print v}' | head -1)
     # If no update available, check-update returns nothing; set candidate to local (already latest).
     [ -z "${CANDIDATE_VER}" ] && CANDIDATE_VER="${LOCAL_VER}"
     ;;
