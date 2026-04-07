@@ -27,7 +27,7 @@ main() {
   [ "$(id -u)" != "0" ] &&
     abort "This script must be executed as root."
 
-  trap 'script_cleanup; exit $exit_status' EXIT
+  trap 'exit_status=$?; script_cleanup; exit $exit_status' EXIT
 
   check_dist
 

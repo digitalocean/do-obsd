@@ -76,6 +76,10 @@ resolve_versions() {
   case "${platform}" in
   deb)
     CANDIDATE_VER=$(apt-cache policy ${SVC_NAME} | awk '/Candidate:/{print $2}')
+    # apt-cache prints "(none)" when no candidate exists in configured repos.
+    if [ "${CANDIDATE_VER}" = "(none)" ]; then
+      abort "No candidate version available for ${SVC_NAME} (apt reports Candidate: (none))"
+    fi
     ;;
   rpm)
     CANDIDATE_VER=$(yum -q --disablerepo="*" --enablerepo="${SVC_NAME}" list available ${SVC_NAME} 2>/dev/null \
