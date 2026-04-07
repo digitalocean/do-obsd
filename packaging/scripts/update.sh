@@ -33,6 +33,12 @@ main() {
     exit 0
   fi
 
+  # Only upgrade if candidate version is strictly newer (not equal or older)
+  if ! is_candidate_newer "${platform}"; then
+    echo "Local version is newer than or equal to candidate; skipping downgrade"
+    exit 0
+  fi
+
   do_upgrade "${platform}"
   echo "Upgrade complete — now at $(resolve_local_ver "${platform}")"
 }
@@ -107,6 +113,35 @@ do_upgrade() {
     ;;
   rpm)
     yum -q -y update ${SVC_NAME}
+    ;;
+  esac
+}
+
+# ── Version comparison: only upgrade if candidate is strictly newer ─────────
+is_candidate_newer() {
+  platform=${1:-}
+  case "${platform}" in
+  deb)
+    # dpkg --compare-versions: returns 0 if ver1 op ver2 is true
+    # Only upgrade if candidate is strictly newer than installed
+    dpkg --compare-versions "${LOCAL_VER}" lt "${CANDIDATE_VER}"
+    ;;
+  rpm)
+    # For RPM, prefer rpmdev-vercmp (standard tool for EVR comparison)
+    # Falls back to checking inequality if tool is unavailable
+    if command -v rpmdev-vercmp >/dev/null 2>&1; then
+      # rpmdev-vercmp outputs the relationship (e.g., "ver1 < ver2")
+      local output
+      output=$(rpmdev-vercmp "${LOCAL_VER}" "${CANDIDATE_VER}" 2>/dev/null)
+      if echo "${output}" | grep -q '<'; then
+        return 0  # candidate is newer, upgrade needed
+      fi
+      return 1   # candidate is not newer
+    else
+      # Fallback: at least skip obvious no-ops (equal versions)
+      # Imperfect but better than retrying needlessly on rollback/pin scenarios
+      [ "${LOCAL_VER}" != "${CANDIDATE_VER}" ]
+    fi
     ;;
   esac
 }
