@@ -39,7 +39,7 @@ main() {
     exit 0
   fi
 
-  do_upgrade "${platform}"
+  do_upgrade "${platform}" || abort "Package upgrade failed"
   echo "Upgrade complete — now at $(resolve_local_ver "${platform}")"
 }
 
@@ -115,7 +115,7 @@ do_upgrade() {
       -qq install -y --only-upgrade ${SVC_NAME}
     ;;
   rpm)
-    yum -q -y update ${SVC_NAME}
+    yum -q -y update ${SVC_NAME} || return 1
     ;;
   esac
 }
