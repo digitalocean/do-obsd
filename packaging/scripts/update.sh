@@ -88,9 +88,11 @@ resolve_versions() {
     fi
     ;;
   rpm)
-    CANDIDATE_VER=$(yum -q --disablerepo="*" --enablerepo="${SVC_NAME}" list available ${SVC_NAME} 2>/dev/null \
-      | awk '/^do-obsd/{print $2}')
-    # If nothing available, candidate equals local (already latest).
+    # Use yum check-update to detect packages with available updates (includes installed pkgs).
+    # yum check-update returns installed_ver -> available_ver on a line matching the package name.
+    CANDIDATE_VER=$(yum -q --disablerepo="*" --enablerepo="${SVC_NAME}" check-update ${SVC_NAME} 2>/dev/null \
+      | awk '/^do-obsd/{print $3}' | head -1)
+    # If no update available, check-update returns nothing; set candidate to local (already latest).
     [ -z "${CANDIDATE_VER}" ] && CANDIDATE_VER="${LOCAL_VER}"
     ;;
   esac
