@@ -1,0 +1,11 @@
+[Unit]
+Description=DigitalOcean Observability Supervisor Updater
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Run native updater script (apt/yum) with existing lock/retry behavior.
+ExecStart=/bin/bash /opt/digitalocean/do-obsd/scripts/update.sh
+StandardOutput=journal
+StandardError=journal

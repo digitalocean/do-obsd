@@ -2,25 +2,18 @@
 # vim: noexpandtab
 #
 # Auto-update do-obsd via the native package manager (apt / yum).
-# Intended to be invoked by cron; uses flock to prevent overlapping runs.
+# Intended to be invoked by systemd timer; uses flock to prevent overlapping runs.
 
 set -ue
 #file used for process locking so only one updater runs at a time
 LOCK_FILE="/var/lock/do-obsd-update.lock"
 SVC_NAME="do-obsd"
-ARCH="x86_64"
 LOCAL_VER=""
 CANDIDATE_VER=""
 APT_RETRIES="5"
 APT_RETRY_DELAY="15"
 
 main() {
-  # Jitter: spread update checks across a 15-minute window.
-  delay=$((RANDOM % 900))
-  echo "Waiting ${delay} seconds"
-  sleep ${delay}
-
-  check_arch
   if command -v apt-get >/dev/null 2>&1; then
     platform="deb"
   elif command -v yum >/dev/null 2>&1; then
@@ -115,6 +108,7 @@ do_upgrade() {
 }
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
+#To prevent simultaneous modifications. If two processes tried to write package metadata at the same time, you'd corrupt the database.
 run_apt_with_retry() {
   _attempt=1
   while [ "${_attempt}" -le "${APT_RETRIES}" ]; do
@@ -139,14 +133,6 @@ run_apt_with_retry() {
     rm -f "${_tmp_log}"
     return 1
   done
-}
-
-check_arch() {
-  echo -n "Checking architecture support..."
-  if [ "$(uname -m)" != "$ARCH" ]; then
-    not_supported
-  fi
-  echo "OK"
 }
 
 not_supported() {

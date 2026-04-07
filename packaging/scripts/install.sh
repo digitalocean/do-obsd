@@ -29,9 +29,7 @@ main() {
 
   trap 'script_cleanup; exit $exit_status' EXIT
 
-  check_do
   check_dist
-  check_arch
 
   case "${dist}" in
   debian | ubuntu)
@@ -225,37 +223,6 @@ check_dist() {
     not_supported
     ;;
   esac
-}
-
-check_arch() {
-  echo "Checking architecture support..."
-  if [ "$(uname -m)" != "x86_64" ]; then
-    not_supported
-  fi
-  echo "OK"
-}
-
-check_do() {
-  echo "Verifying machine compatibility..."
-  dmi_bios_file="/sys/devices/virtual/dmi/id/bios_vendor"
-  if [ -f "${dmi_bios_file}" ]; then
-    read -r sys_vendor <${dmi_bios_file}
-  else
-    sys_vendor=$(dmidecode -s bios-vendor)
-  fi
-  if ! [ "$sys_vendor" = "DigitalOcean" ]; then
-    cat <<-EOF
-
-		The DigitalOcean Observability Supervisor is only supported on DigitalOcean machines.
-
-		If you are seeing this message on an older droplet, you may need to power-off
-		and then power-on at http://cloud.digitalocean.com. After power-cycling,
-		please re-run this script.
-
-		EOF
-    exit 1
-  fi
-  echo "OK"
 }
 
 not_supported() {
