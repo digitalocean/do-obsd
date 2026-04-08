@@ -88,13 +88,25 @@ resolve_versions() {
     fi
     ;;
   rpm)
-    # Use yum check-update to detect packages with available updates (includes installed pkgs).
-    # Standard yum check-update output is: package.arch  version  repo.
-    # Match the requested package field explicitly and extract the version column.
-    CANDIDATE_VER=$(yum -q --disablerepo="*" --enablerepo="${SVC_NAME}" check-update ${SVC_NAME} 2>/dev/null \
-      | awk -v svc="${SVC_NAME}" '($1 == svc || index($1, svc ".") == 1) {v=$2; if(v !~ /^[0-9]+:/) v="0:"v; print v}' | head -1)
-    # If no update available, check-update returns nothing; set candidate to local (already latest).
-    [ -z "${CANDIDATE_VER}" ] && CANDIDATE_VER="${LOCAL_VER}"
+    # yum check-update returns:
+    #   0   => no updates
+    #   100 => updates available
+    #   else => error (repo/network/config), must not be treated as "no update"
+    _yum_output=$(yum -q --disablerepo="*" --enablerepo="${SVC_NAME}" check-update ${SVC_NAME} 2>/dev/null)
+    _yum_rc=$?
+    case "${_yum_rc}" in
+    0)
+      CANDIDATE_VER="${LOCAL_VER}"
+      ;;
+    100)
+      # Standard yum output is: package.arch  version  repo.
+      CANDIDATE_VER=$(echo "${_yum_output}" | awk -v svc="${SVC_NAME}" '($1 == svc || index($1, svc ".") == 1) {v=$2; if(v !~ /^[0-9]+:/) v="0:"v; print v; exit}')
+      [ -z "${CANDIDATE_VER}" ] && abort "yum reported updates but no candidate version was parsed for ${SVC_NAME}"
+      ;;
+    *)
+      abort "yum check-update failed for ${SVC_NAME} (exit ${_yum_rc})"
+      ;;
+    esac
     ;;
   esac
 
