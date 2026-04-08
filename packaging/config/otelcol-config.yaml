@@ -32,7 +32,7 @@ processors:
 
 exporters:
   otlp:
-    endpoint: ""
+    endpoint: insights-otlp.digitalocean.com:443
     tls:
       insecure: false
     compression: gzip
@@ -43,6 +43,7 @@ exporters:
       enabled: true
       max_elapsed_time: 120s
   debug:
+    # basic = summary per batch; detailed = full payloads (heavy on journal — avoid for wide fleet default).
     verbosity: basic
 
 service:
