@@ -16,6 +16,7 @@ RETRY_CRON=${RETRY_CRON_SCHEDULE}/do-obsd-install
 
 dist="unknown"
 exit_status=0
+trap_status=0
 no_retry="false"
 repo_name=do-obsd
 deb_list=/etc/apt/sources.list.d/${repo_name}.list
@@ -27,7 +28,8 @@ main() {
   [ "$(id -u)" != "0" ] &&
     abort "This script must be executed as root."
 
-  trap 'exit_status=$?; script_cleanup; exit $exit_status' EXIT
+  trap 'trap_status=$?; [ "${exit_status}" -eq 0 ] && exit_status=${trap_status}; script_cleanup; exit ${exit_status}' EXIT
+  trap 'no_retry="true"; exit_status=130; exit 130' INT TERM
 
   check_dist
 
@@ -66,6 +68,8 @@ main() {
   if [ ${exit_status} -eq 0 ]; then
     ensure_do_agent || true
   fi
+
+  return ${exit_status}
 }
 
 patch_retry_install() {
