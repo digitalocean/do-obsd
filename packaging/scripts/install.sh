@@ -4,7 +4,7 @@
 
 set -u
 
-REPO_DOMAIN="obsd.sfo3.cdn.digitaloceanspaces.com"
+REPO_DOMAIN="triton.sfo3.cdn.digitaloceanspaces.com"
 REPO_HOST="https://${REPO_DOMAIN}"
 REPO_GPG_KEY=${REPO_HOST}/gpg.key
 INSTALL_SCRIPT_URL="${REPO_HOST}/install.sh"
@@ -23,6 +23,7 @@ deb_list=/etc/apt/sources.list.d/${repo_name}.list
 deb_pref=/etc/apt/preferences.d/${repo_name}.pref
 deb_keyfile=/usr/share/keyrings/${repo_name}-keyring.gpg
 rpm_repo=/etc/yum.repos.d/${repo_name}.repo
+ARCH_UNSUPPORTED_EXIT=42
 
 main() {
   [ "$(id -u)" != "0" ] &&
@@ -40,6 +41,10 @@ main() {
       echo "Installing do-obsd, attempt ${i}"
       install_apt
       exit_status=$?
+      if [ ${exit_status} -eq ${ARCH_UNSUPPORTED_EXIT} ]; then
+        no_retry="true"
+        break
+      fi
       if [ ${exit_status} -eq 0 ]; then
         break
       fi
@@ -168,8 +173,8 @@ install_apt() (
   echo "Checking architecture support..."
   _arch=$(dpkg --print-architecture 2>/dev/null || true)
   if [ "${_arch}" != "amd64" ]; then
-    no_retry="true"
-    abort "do-obsd apt repository is amd64-only; detected architecture: ${_arch:-unknown}"
+    echo "ERROR: do-obsd apt repository is amd64-only; detected architecture: ${_arch:-unknown}" >&2
+    exit ${ARCH_UNSUPPORTED_EXIT}
   fi
 
   echo "Setting up do-obsd apt repository..."
