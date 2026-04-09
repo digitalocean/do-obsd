@@ -10,6 +10,7 @@ LOCK_FILE="/var/lock/do-obsd-update.lock"
 SVC_NAME="do-obsd"
 LOCAL_VER=""
 CANDIDATE_VER=""
+RPM_UPDATE_AVAILABLE="false"
 APT_RETRIES="5"
 APT_RETRY_DELAY="15"
 
@@ -96,9 +97,11 @@ resolve_versions() {
     _yum_rc=$?
     case "${_yum_rc}" in
     0)
+      RPM_UPDATE_AVAILABLE="false"
       CANDIDATE_VER="${LOCAL_VER}"
       ;;
     100)
+      RPM_UPDATE_AVAILABLE="true"
       # Standard yum output is: package.arch  version  repo.
       CANDIDATE_VER=$(echo "${_yum_output}" | awk -v svc="${SVC_NAME}" '($1 == svc || index($1, svc ".") == 1) {v=$2; if(v !~ /^[0-9]+:/) v="0:"v; print v; exit}')
       [ -z "${CANDIDATE_VER}" ] && abort "yum reported updates but no candidate version was parsed for ${SVC_NAME}"
@@ -143,7 +146,7 @@ is_candidate_newer() {
     ;;
   rpm)
     # For RPM, prefer rpmdev-vercmp (standard tool for EVR comparison)
-    # Falls back to checking inequality if tool is unavailable
+    # If unavailable, rely on yum check-update's update signal captured in resolve_versions().
     if command -v rpmdev-vercmp >/dev/null 2>&1; then
       # rpmdev-vercmp outputs the relationship (e.g., "ver1 < ver2")
       local output
@@ -153,9 +156,9 @@ is_candidate_newer() {
       fi
       return 1   # candidate is not newer
     else
-      # Fallback: at least skip obvious no-ops (equal versions)
-      # Imperfect but better than retrying needlessly on rollback/pin scenarios
-      [ "${LOCAL_VER}" != "${CANDIDATE_VER}" ]
+      # yum check-update returns 100 only when a newer package is available.
+      # This avoids unsafe inequality checks that can misclassify downgrades.
+      [ "${RPM_UPDATE_AVAILABLE}" = "true" ]
     fi
     ;;
   esac
