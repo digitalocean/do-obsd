@@ -160,6 +160,14 @@ install_apt() (
   set -e
   export DEBIAN_FRONTEND=noninteractive
 
+  # Verify architecture before writing repo config; abort without retry on mismatch
+  echo "Checking architecture support..."
+  _arch=$(dpkg --print-architecture 2>/dev/null || true)
+  if [ "${_arch}" != "amd64" ]; then
+    no_retry="true"
+    abort "do-obsd apt repository is amd64-only; detected architecture: ${_arch:-unknown}"
+  fi
+
   echo "Setting up do-obsd apt repository..."
   install_deps "deb"
 
