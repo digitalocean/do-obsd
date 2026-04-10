@@ -1,8 +1,28 @@
+# Fleet OTel collector defaults (do-otelcol.service MemoryMax=256M).
+#
+# Host awareness (IN-6949): deployment surface is explicit — no auto-discovery.
+# - Infra sets OTEL_RESOURCE_ATTRIBUTES on the collector process (e.g. systemd
+#   Environment= in a drop-in, or /etc/default/do-otelcol via do-otelcol.service).
+# - Example: OTEL_RESOURCE_ATTRIBUTES=server.type=gpu
+# - If server.type is not set in env, resource/host_type_default inserts server.type=regular.
+# - resourcedetection reads OTEL_RESOURCE_ATTRIBUTES (and other standard OTel env) into resource.
 receivers:
   journald:
     units: []
     priority: info
     start_at: end
+
+processors:
+  # Merge OTEL_RESOURCE_ATTRIBUTES (and related OTel env) into resource; no discovery beyond env.
+  resourcedetection:
+    detectors: [env]
+    timeout: 2s
+  # Default when server.type is absent (regular droplets need no env).
+  resource/host_type_default:
+    attributes:
+      - key: server.type
+        value: regular
+        action: insert
 
 exporters:
   debug:
@@ -12,4 +32,7 @@ service:
   pipelines:
     logs:
       receivers: [journald]
+      processors:
+        - resourcedetection
+        - resource/host_type_default
       exporters: [debug]

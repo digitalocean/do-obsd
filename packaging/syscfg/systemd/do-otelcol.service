@@ -6,6 +6,9 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=do-otelcol
+# Optional host-awareness / OTel env (IN-6949): product teams can set OTEL_RESOURCE_ATTRIBUTES=server.type=…
+# without editing this unit. Create /etc/default/do-otelcol (optional file; "-" = ignore if missing).
+EnvironmentFile=-/etc/default/do-otelcol
 ExecStart=/opt/digitalocean/bin/do-otelcol --config=/etc/do-otelcol/config.yaml
 Restart=on-failure
 RestartSec=5s
