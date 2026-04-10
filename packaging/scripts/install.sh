@@ -4,7 +4,7 @@
 
 set -u
 
-REPO_DOMAIN="triton.sfo3.cdn.digitaloceanspaces.com"
+REPO_DOMAIN="obsd.sfo3.cdn.digitaloceanspaces.com"
 REPO_HOST="https://${REPO_DOMAIN}"
 REPO_GPG_KEY=${REPO_HOST}/gpg.key
 INSTALL_SCRIPT_URL="${REPO_HOST}/install.sh"
