@@ -7,9 +7,7 @@ SVC_NAME=do-obsd
 OTELCOL_SVC_NAME=do-otelcol
 OTELCOL_CONFIG_DIR=/etc/${OTELCOL_SVC_NAME}
 SUDOERS_DROPIN=/etc/sudoers.d/${SVC_NAME}
-INSTALL_DIR=/opt/digitalocean/${SVC_NAME}
-CRON_SCHEDULE=/etc/cron.hourly
-CRON=${CRON_SCHEDULE}/${SVC_NAME}
+UPDATER_TIMER=${SVC_NAME}-update.timer
 
 abort_perm() {
 	echo "ERROR: $1" >&2
@@ -89,13 +87,13 @@ main() {
 	set_permissions
 	configure_sudoers
 
-	systemctl daemon-reload
+	systemctl daemon-reload || true
 
 	# do-obsd manages do-otelcol lifecycle — it installs the binary and starts the service.
 	# do-otelcol.service is NOT enabled here; do-obsd starts it after binary placement.
 	echo "enable systemd service"
-	systemctl enable -f ${SVC_NAME}
-	systemctl restart ${SVC_NAME}
+	systemctl enable -f ${SVC_NAME} || true
+	systemctl restart ${SVC_NAME} || true
 
 	patch_updates
 }
@@ -121,16 +119,10 @@ set_permissions() {
 }
 
 patch_updates() {
-	[ -f "${CRON}" ] && rm -f "${CRON}"
-	script="${INSTALL_DIR}/scripts/update.sh"
-	mkdir -p ${CRON_SCHEDULE}
-
-	cat <<-EOF >"${CRON}"
-	#!/bin/sh
-	/bin/bash ${script} >/var/log/${SVC_NAME}.update.log 2>&1
-	EOF
-
-	chmod +x "${CRON}"
+	# systemd timer scheduling.
+	echo "enable updater timer"
+	systemctl enable -f ${UPDATER_TIMER} || true
+	systemctl restart ${UPDATER_TIMER} || true
 }
 
 # configure_sudoers grants the do-obsd service user the ability to start, stop, and restart

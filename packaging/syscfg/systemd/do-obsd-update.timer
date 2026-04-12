@@ -1,0 +1,11 @@
+[Unit]
+Description=Run DigitalOcean Observability Supervisor updater hourly
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+RandomizedDelaySec=15m
+Unit=do-obsd-update.service
+
+[Install]
+WantedBy=timers.target

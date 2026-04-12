@@ -7,6 +7,7 @@ set -u
 REPO_DOMAIN="obsd.sfo3.cdn.digitaloceanspaces.com"
 REPO_HOST="https://${REPO_DOMAIN}"
 REPO_GPG_KEY=${REPO_HOST}/gpg.key
+INSTALL_SCRIPT_URL="${REPO_HOST}/install.sh"
 
 branch="do-obsd-preview"
 
@@ -15,22 +16,23 @@ RETRY_CRON=${RETRY_CRON_SCHEDULE}/do-obsd-install
 
 dist="unknown"
 exit_status=0
+trap_status=0
 no_retry="false"
 repo_name=do-obsd
 deb_list=/etc/apt/sources.list.d/${repo_name}.list
 deb_pref=/etc/apt/preferences.d/${repo_name}.pref
 deb_keyfile=/usr/share/keyrings/${repo_name}-keyring.gpg
 rpm_repo=/etc/yum.repos.d/${repo_name}.repo
+ARCH_UNSUPPORTED_EXIT=42
 
 main() {
   [ "$(id -u)" != "0" ] &&
     abort "This script must be executed as root."
 
-  trap 'exit_status=$?; script_cleanup; exit $exit_status' EXIT
+  trap 'trap_status=$?; [ "${exit_status}" -eq 0 ] && exit_status=${trap_status}; script_cleanup; exit ${exit_status}' EXIT
+  trap 'no_retry="true"; exit_status=130; exit 130' INT TERM
 
-  check_do
   check_dist
-  check_arch
 
   case "${dist}" in
   debian | ubuntu)
@@ -39,6 +41,10 @@ main() {
       echo "Installing do-obsd, attempt ${i}"
       install_apt
       exit_status=$?
+      if [ ${exit_status} -eq ${ARCH_UNSUPPORTED_EXIT} ]; then
+        no_retry="true"
+        break
+      fi
       if [ ${exit_status} -eq 0 ]; then
         break
       fi
@@ -67,6 +73,8 @@ main() {
   if [ ${exit_status} -eq 0 ]; then
     ensure_do_agent || true
   fi
+
+  return ${exit_status}
 }
 
 patch_retry_install() {
@@ -84,34 +92,34 @@ patch_retry_install() {
     fi
   fi
 
-  cat <<'EOF' >"${RETRY_CRON}"
+  cat <<EOF >"${RETRY_CRON}"
 #!/bin/sh
-tmp_file=$(mktemp -t do_obsd.install.XXXXXX)
-trap "rm -f \"${tmp_file}\"" EXIT
-url="https://obsd.sfo3.cdn.digitaloceanspaces.com/install.sh"
+tmp_file=\$(mktemp -t do_obsd.install.XXXXXX)
+trap "rm -f \"\${tmp_file}\"" EXIT
+url="${INSTALL_SCRIPT_URL}"
 log_file="/var/log/do-obsd.install.log"
 
 if command -v curl >/dev/null 2>&1; then
-  if ! curl -sSL "${url}" -o "${tmp_file}"; then
-    now=$(date +"%T")
-    echo "Retry at: ${now} - failed to download install script with curl" >> "${log_file}"
+  if ! curl -sSL "\${url}" -o "\${tmp_file}"; then
+    now=\$(date +"%T")
+    echo "Retry at: \${now} - failed to download install script with curl" >> "\${log_file}"
     exit 1
   fi
 elif command -v wget >/dev/null 2>&1; then
-  if ! wget -qO "${tmp_file}" "${url}"; then
-    now=$(date +"%T")
-    echo "Retry at: ${now} - failed to download install script with wget" >> "${log_file}"
+  if ! wget -qO "\${tmp_file}" "\${url}"; then
+    now=\$(date +"%T")
+    echo "Retry at: \${now} - failed to download install script with wget" >> "\${log_file}"
     exit 1
   fi
 else
-  now=$(date +"%T")
-  echo "Retry at: ${now} - neither curl nor wget is installed; cannot download install script" >> "${log_file}"
+  now=\$(date +"%T")
+  echo "Retry at: \${now} - neither curl nor wget is installed; cannot download install script" >> "\${log_file}"
   exit 1
 fi
 
-now=$(date +"%T")
-echo "Retry at: ${now}" >> "${log_file}"
-/bin/sh "${tmp_file}" >> "${log_file}" 2>&1
+now=\$(date +"%T")
+echo "Retry at: \${now}" >> "\${log_file}"
+/bin/sh "\${tmp_file}" >> "\${log_file}" 2>&1
 EOF
 
   chmod +x "${RETRY_CRON}"
@@ -161,21 +169,32 @@ install_apt() (
   set -e
   export DEBIAN_FRONTEND=noninteractive
 
+  # Verify architecture before writing repo config; abort without retry on mismatch
+  echo "Checking architecture support..."
+  _arch=$(dpkg --print-architecture 2>/dev/null || true)
+  if [ "${_arch}" != "amd64" ]; then
+    echo "ERROR: do-obsd apt repository is amd64-only; detected architecture: ${_arch:-unknown}" >&2
+    exit ${ARCH_UNSUPPORTED_EXIT}
+  fi
+
   echo "Setting up do-obsd apt repository..."
   install_deps "deb"
 
   echo "Importing GPG public key"
   wget -qO- "${REPO_GPG_KEY}" | gpg --dearmor >"${deb_keyfile}"
-  echo "deb [signed-by=${deb_keyfile}] ${REPO_HOST}/apt/${branch} main main" >"${deb_list}"
+  # arch=amd64: repo is amd64-only; avoids apt multi-arch confusion on some images.
+  echo "deb [signed-by=${deb_keyfile} arch=amd64] ${REPO_HOST}/apt/${branch} main main" >"${deb_list}"
+  # Pin by Release Origin/Label/Codename (not the repo hostname — "origin" in apt prefs is
+  # the Origin: field from InRelease, which we publish as DigitalOcean / do-obsd).
   cat <<-EOF >${deb_pref}
 	Package: *
-	Pin: origin ${REPO_DOMAIN}
-	Pin-Priority: 100
+	Pin: release o=DigitalOcean,l=do-obsd,n=main
+	Pin-Priority: 500
 	EOF
 
   echo "Installing do-obsd"
-  apt-get -qq update
-  apt-get -qq --fix-missing install -y do-obsd
+  apt-get -q update
+  apt-get -q --fix-missing install -y do-obsd
 )
 
 install_yum() (
@@ -221,37 +240,6 @@ check_dist() {
     not_supported
     ;;
   esac
-}
-
-check_arch() {
-  echo "Checking architecture support..."
-  if [ "$(uname -m)" != "x86_64" ]; then
-    not_supported
-  fi
-  echo "OK"
-}
-
-check_do() {
-  echo "Verifying machine compatibility..."
-  dmi_bios_file="/sys/devices/virtual/dmi/id/bios_vendor"
-  if [ -f "${dmi_bios_file}" ]; then
-    read -r sys_vendor <${dmi_bios_file}
-  else
-    sys_vendor=$(dmidecode -s bios-vendor)
-  fi
-  if ! [ "$sys_vendor" = "DigitalOcean" ]; then
-    cat <<-EOF
-
-		The DigitalOcean Observability Supervisor is only supported on DigitalOcean machines.
-
-		If you are seeing this message on an older droplet, you may need to power-off
-		and then power-on at http://cloud.digitalocean.com. After power-cycling,
-		please re-run this script.
-
-		EOF
-    exit 1
-  fi
-  echo "OK"
 }
 
 not_supported() {
