@@ -1,14 +1,3 @@
-# Fleet OTel collector defaults (do-otelcol.service MemoryMax=256M).
-#
-# Phase 1 — backpressure: memory_limiter throttles intake before cgroup pressure; under sustained
-# overload, data is dropped. batch caps records per export batch.
-#
-# Phase 2 — export best practices:
-# - otlp → Insights: TLS to :443, gzip compression on the wire, bounded sending_queue + retries.
-# - resource: stable service.name for downstream routing and dashboards.
-# - debug: optional local diagnostics (also exported to journal); reduce verbosity in production if noisy.
-# Add auth headers (or env-backed secrets) per Insights OTLP runbook if the endpoint requires them.
-# Do not enable file_storage-backed queues without an explicit disk budget (unbounded spill risk).
 receivers:
   journald:
     units: []
@@ -18,13 +7,10 @@ receivers:
 processors:
   memory_limiter:
     check_interval: 1s
+    # Soft limit (collector begins refusing data) = limit_mib - spike_limit_mib = 140 MiB.
+    # Hard limit = limit_mib = 180 MiB.
     limit_mib: 180
     spike_limit_mib: 40
-  resource:
-    attributes:
-      - key: team_id
-        value: team_obsd
-        action: upsert
   batch/logs:
     send_batch_size: 1024
     send_batch_max_size: 2048
@@ -37,18 +23,19 @@ exporters:
       insecure: false
     compression: gzip
     sending_queue:
+      enabled: true
       queue_size: 256
-      num_consumers: 4
+      num_consumers: 2
     retry_on_failure:
       enabled: true
       max_elapsed_time: 120s
-  debug:
-    # basic = summary per batch; detailed = full payloads (heavy on journal — avoid for wide fleet default).
-    verbosity: basic
 
 service:
+  telemetry:
+    metrics:
+      address: localhost:9464 # Bind self-metrics to loopback; avoids port conflicts with other collector instances.
   pipelines:
     logs:
       receivers: [journald]
-      processors: [memory_limiter, resource, batch/logs]
-      exporters: [otlp, debug]
+      processors: [memory_limiter, batch/logs]
+      exporters: [otlp]
