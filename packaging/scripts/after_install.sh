@@ -92,9 +92,12 @@ main() {
 	systemctl restart ${SVC_NAME} || true
 
 	# do-otelcol.service is managed by systemd directly; do-obsd writes the config
-	# and otelcol reloads via its file provider watcher when the config changes.
+	# and the path unit restarts do-otelcol whenever the config file changes.
 	systemctl enable -f ${OTELCOL_SVC_NAME} || true
 	systemctl restart ${OTELCOL_SVC_NAME} || true
+
+	systemctl enable -f ${OTELCOL_SVC_NAME}-config.path || true
+	systemctl start ${OTELCOL_SVC_NAME}-config.path || true
 
 	patch_updates
 }
@@ -128,6 +131,5 @@ patch_updates() {
 	systemctl enable -f ${UPDATER_TIMER} || true
 	systemctl restart ${UPDATER_TIMER} || true
 }
-
 
 main

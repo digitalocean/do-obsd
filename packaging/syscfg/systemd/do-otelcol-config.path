@@ -1,0 +1,9 @@
+[Unit]
+Description=Watch do-otelcol configuration file for changes
+
+[Path]
+PathChanged=/etc/do-otelcol/config.yaml
+Unit=do-otelcol-config-reload.service
+
+[Install]
+WantedBy=multi-user.target

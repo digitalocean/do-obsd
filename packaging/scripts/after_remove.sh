@@ -48,6 +48,9 @@ clean_systemd() {
 	systemctl disable -f ${UPDATER_SVC} || true
 	systemctl stop ${OTELCOL_SVC_NAME}.service || true
 	systemctl disable -f ${OTELCOL_SVC_NAME}.service || true
+	systemctl stop ${OTELCOL_SVC_NAME}-config.path || true
+	systemctl disable -f ${OTELCOL_SVC_NAME}-config.path || true
+	systemctl stop ${OTELCOL_SVC_NAME}-config-reload.service || true
 	systemctl daemon-reload || true
 }
 

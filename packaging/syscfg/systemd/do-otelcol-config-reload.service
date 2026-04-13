@@ -1,0 +1,7 @@
+[Unit]
+Description=Restart do-otelcol after configuration change
+After=do-otelcol.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemctl restart do-otelcol.service
