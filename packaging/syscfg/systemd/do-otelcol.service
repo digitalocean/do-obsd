@@ -6,7 +6,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=do-otelcol
-ExecStart=/opt/digitalocean/bin/do-otelcol --config=/etc/do-otelcol/config.yaml
+ExecStart=/opt/digitalocean/bin/do-otelcol --config=file:///etc/do-otelcol/config.yaml
 Restart=on-failure
 RestartSec=5s
 MemoryMax=256M

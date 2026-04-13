@@ -89,11 +89,14 @@ main() {
 
 	systemctl daemon-reload || true
 
-	# do-obsd manages do-otelcol lifecycle — it installs the binary and starts the service.
-	# do-otelcol.service is NOT enabled here; do-obsd starts it after binary placement.
-	echo "enable systemd service"
+	echo "enable systemd services"
 	systemctl enable -f ${SVC_NAME} || true
 	systemctl restart ${SVC_NAME} || true
+
+	# do-otelcol.service is managed by systemd directly; do-obsd writes the config
+	# and otelcol reloads via its file provider watcher when the config changes.
+	systemctl enable -f ${OTELCOL_SVC_NAME} || true
+	systemctl restart ${OTELCOL_SVC_NAME} || true
 
 	patch_updates
 }
@@ -113,8 +116,11 @@ set_permissions() {
 	# Bundle binary is read-only; mode only (owner from package)
 	secure_path filem "/opt/digitalocean/bundle/${OTELCOL_SVC_NAME}" 755
 
-	# Config: supervisor (do-obsd) writes, collector (do-otelcol) reads
-	secure_path dir "${OTELCOL_CONFIG_DIR}" "${SVC_NAME}:${OTELCOL_SVC_NAME}" 750
+	# Config: supervisor (do-obsd) writes, collector (do-otelcol) reads.
+	# The setgid bit (2750) causes new files created by do-obsd in this directory
+	# to inherit the do-otelcol group automatically, so atomic config writes
+	# (temp file + rename) are readable by the collector without an explicit chown.
+	secure_path dir "${OTELCOL_CONFIG_DIR}" "${SVC_NAME}:${OTELCOL_SVC_NAME}" 2750
 	secure_path file "${OTELCOL_CONFIG_DIR}/config.yaml" "${SVC_NAME}:${OTELCOL_SVC_NAME}" 640
 }
 
