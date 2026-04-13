@@ -88,6 +88,10 @@ main() {
 	systemctl daemon-reload || true
 
 	echo "enable systemd services"
+	# Start the config watcher before do-obsd so the initial WriteConfig triggers a reload.
+	systemctl enable -f ${OTELCOL_SVC_NAME}-config.path || true
+	systemctl start ${OTELCOL_SVC_NAME}-config.path || true
+
 	systemctl enable -f ${SVC_NAME} || true
 	systemctl restart ${SVC_NAME} || true
 
@@ -95,9 +99,6 @@ main() {
 	# and the path unit restarts do-otelcol whenever the config file changes.
 	systemctl enable -f ${OTELCOL_SVC_NAME} || true
 	systemctl restart ${OTELCOL_SVC_NAME} || true
-
-	systemctl enable -f ${OTELCOL_SVC_NAME}-config.path || true
-	systemctl start ${OTELCOL_SVC_NAME}-config.path || true
 
 	patch_updates
 }
