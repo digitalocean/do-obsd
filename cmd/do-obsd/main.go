@@ -1,20 +1,16 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/digitalocean/do-obsd/internal/collector"
 )
 
 var version = "dev"
-
-const stopTimeout = 30 * time.Second
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, nil)))
@@ -38,22 +34,9 @@ func run() error {
 		return fmt.Errorf("write collector config: %w", err)
 	}
 
-	if err := col.Start(context.Background()); err != nil {
-		return fmt.Errorf("start collector: %w", err)
-	}
-
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGTERM, syscall.SIGINT)
 	<-sigs
-
-	slog.Info("stopping")
-
-	ctx, cancel := context.WithTimeout(context.Background(), stopTimeout)
-	defer cancel()
-
-	if err := col.Stop(ctx); err != nil {
-		slog.Warn("stop collector failed", "err", err)
-	}
 
 	return nil
 }

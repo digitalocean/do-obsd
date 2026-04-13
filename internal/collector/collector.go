@@ -1,7 +1,6 @@
 package collector
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -14,26 +13,23 @@ const (
 
 	collectorBin        = "/opt/digitalocean/bin/do-otelcol"
 	collectorConfigPath = "/etc/do-otelcol/config.yaml"
-	collectorService    = "do-otelcol.service"
 )
 
-// Collector manages the do-otelcol lifecycle.
+// Collector manages the do-otelcol binary and configuration.
 type Collector struct {
-	os  osOperator
-	cmd cmdRunner
+	os osOperator
 }
 
-// New returns a Collector with real OS and exec implementations.
+// New returns a Collector with real OS implementations.
 func New() *Collector {
 	return &Collector{
-		os:  &realOSOperator{},
-		cmd: &realCmdRunner{},
+		os: &realOSOperator{},
 	}
 }
 
 // Install copies the bundled binary from bundlePath to collectorBin atomically.
-// The bundle is shipped with the package; OpAMP will replace this with a verified
-// download from a Spaces URL once that delivery path is implemented.
+// The bundle is shipped with the package; the binary is placed once at startup so
+// that the systemd-managed do-otelcol.service can exec it.
 func (c *Collector) Install() error {
 	slog.Info("installing collector", "src", bundlePath, "dst", collectorBin)
 
@@ -93,36 +89,6 @@ func (c *Collector) WriteConfig(data []byte) error {
 	}
 	if err := c.os.Rename(tmpPath, collectorConfigPath); err != nil {
 		return fmt.Errorf("install config: %w", err)
-	}
-	return nil
-}
-
-// Start starts do-otelcol.service via systemctl.
-func (c *Collector) Start(ctx context.Context) error {
-	slog.Info("starting collector", "service", collectorService)
-	out, err := c.cmd.Run(ctx, sudoBin, "-n", systemctlBin, "start", collectorService)
-	if err != nil {
-		return fmt.Errorf("systemctl start %s: %w (output: %s)", collectorService, err, out)
-	}
-	return nil
-}
-
-// Restart restarts do-otelcol.service via systemctl.
-func (c *Collector) Restart(ctx context.Context) error {
-	slog.Info("restarting collector", "service", collectorService)
-	out, err := c.cmd.Run(ctx, sudoBin, "-n", systemctlBin, "restart", collectorService)
-	if err != nil {
-		return fmt.Errorf("systemctl restart %s: %w (output: %s)", collectorService, err, out)
-	}
-	return nil
-}
-
-// Stop stops do-otelcol.service via systemctl.
-func (c *Collector) Stop(ctx context.Context) error {
-	slog.Info("stopping collector", "service", collectorService)
-	out, err := c.cmd.Run(ctx, sudoBin, "-n", systemctlBin, "stop", collectorService)
-	if err != nil {
-		return fmt.Errorf("systemctl stop %s: %w (output: %s)", collectorService, err, out)
 	}
 	return nil
 }

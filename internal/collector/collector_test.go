@@ -1,7 +1,6 @@
 package collector
 
 import (
-	"context"
 	"errors"
 	"io"
 	"os"
@@ -11,28 +10,6 @@ import (
 
 	"go.uber.org/mock/gomock"
 )
-
-// TestCollectorServiceUnitName guards the systemd unit managed via sudo (packaging sudoers allows only this unit).
-func TestCollectorServiceUnitName(t *testing.T) {
-	if collectorService != "do-otelcol.service" {
-		t.Fatalf("collectorService = %q, want do-otelcol.service", collectorService)
-	}
-}
-
-// TestSudoBinPath and TestSystemctlBinPath guard the absolute paths used in the sudo invocation.
-// The sudoers drop-in installed by after_install.sh grants access by exact path — a relative or
-// wrong path silently breaks privilege escalation at runtime without a compile-time signal.
-func TestSudoBinPath(t *testing.T) {
-	if sudoBin != "/usr/bin/sudo" {
-		t.Fatalf("sudoBin = %q, want /usr/bin/sudo — must match path in packaging/scripts/after_install.sh sudoers rule", sudoBin)
-	}
-}
-
-func TestSystemctlBinPath(t *testing.T) {
-	if systemctlBin != "/usr/bin/systemctl" {
-		t.Fatalf("systemctlBin = %q, want /usr/bin/systemctl — must match path in packaging/scripts/after_install.sh sudoers rule", systemctlBin)
-	}
-}
 
 func TestInstall(t *testing.T) {
 	type args struct {
@@ -90,7 +67,7 @@ func TestInstall(t *testing.T) {
 			mockOS := NewMockosOperator(ctrl)
 			mockTmp := NewMocktempFile(ctrl)
 
-			c := &Collector{os: mockOS, cmd: nil}
+			c := &Collector{os: mockOS}
 			expectedErr := tt.expects(&args{mockOS, mockTmp})
 
 			err := c.Install()
@@ -161,126 +138,6 @@ func TestWriteConfig(t *testing.T) {
 			expectedErr := tt.expects(mockOS, mockTmp)
 
 			err := c.WriteConfig(configData)
-
-			if !errors.Is(err, expectedErr) {
-				t.Fatalf("expected error %v, got %v", expectedErr, err)
-			}
-		})
-	}
-}
-
-func TestStart(t *testing.T) {
-	tests := []struct {
-		name    string
-		expects func(*MockcmdRunner) error
-	}{
-		{
-			name: "happy path",
-			expects: func(cmd *MockcmdRunner) error {
-				cmd.EXPECT().Run(gomock.Any(), sudoBin, "-n", systemctlBin, "start", collectorService).Return(nil, nil)
-				return nil
-			},
-		},
-		{
-			name: "systemctl fails",
-			expects: func(cmd *MockcmdRunner) error {
-				cmdErr := errors.New("exit status 1")
-				cmd.EXPECT().Run(gomock.Any(), sudoBin, "-n", systemctlBin, "start", collectorService).Return([]byte("failed"), cmdErr)
-				return cmdErr
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
-			mockCmd := NewMockcmdRunner(ctrl)
-			c := &Collector{os: nil, cmd: mockCmd}
-			expectedErr := tt.expects(mockCmd)
-
-			err := c.Start(context.Background())
-
-			if !errors.Is(err, expectedErr) {
-				t.Fatalf("expected error %v, got %v", expectedErr, err)
-			}
-		})
-	}
-}
-
-func TestRestart(t *testing.T) {
-	tests := []struct {
-		name    string
-		expects func(*MockcmdRunner) error
-	}{
-		{
-			name: "happy path",
-			expects: func(cmd *MockcmdRunner) error {
-				cmd.EXPECT().Run(gomock.Any(), sudoBin, "-n", systemctlBin, "restart", collectorService).Return(nil, nil)
-				return nil
-			},
-		},
-		{
-			name: "systemctl fails",
-			expects: func(cmd *MockcmdRunner) error {
-				cmdErr := errors.New("exit status 1")
-				cmd.EXPECT().Run(gomock.Any(), sudoBin, "-n", systemctlBin, "restart", collectorService).Return([]byte("failed"), cmdErr)
-				return cmdErr
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
-			mockCmd := NewMockcmdRunner(ctrl)
-			c := &Collector{os: nil, cmd: mockCmd}
-			expectedErr := tt.expects(mockCmd)
-
-			err := c.Restart(context.Background())
-
-			if !errors.Is(err, expectedErr) {
-				t.Fatalf("expected error %v, got %v", expectedErr, err)
-			}
-		})
-	}
-}
-
-func TestStop(t *testing.T) {
-	tests := []struct {
-		name    string
-		expects func(*MockcmdRunner) error
-	}{
-		{
-			name: "happy path",
-			expects: func(cmd *MockcmdRunner) error {
-				cmd.EXPECT().Run(gomock.Any(), sudoBin, "-n", systemctlBin, "stop", collectorService).Return(nil, nil)
-				return nil
-			},
-		},
-		{
-			name: "systemctl fails",
-			expects: func(cmd *MockcmdRunner) error {
-				cmdErr := errors.New("exit status 1")
-				cmd.EXPECT().Run(gomock.Any(), sudoBin, "-n", systemctlBin, "stop", collectorService).Return([]byte("failed"), cmdErr)
-				return cmdErr
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
-			mockCmd := NewMockcmdRunner(ctrl)
-			c := &Collector{os: nil, cmd: mockCmd}
-			expectedErr := tt.expects(mockCmd)
-
-			err := c.Stop(context.Background())
 
 			if !errors.Is(err, expectedErr) {
 				t.Fatalf("expected error %v, got %v", expectedErr, err)
