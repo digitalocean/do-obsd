@@ -34,6 +34,10 @@ func run() error {
 		return fmt.Errorf("install collector: %w", err)
 	}
 
+	if err := col.WriteConfig(collector.GPUConfig); err != nil {
+		return fmt.Errorf("write collector config: %w", err)
+	}
+
 	if err := col.Start(context.Background()); err != nil {
 		return fmt.Errorf("start collector: %w", err)
 	}

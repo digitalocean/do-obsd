@@ -1,0 +1,41 @@
+receivers:
+  journald:
+    units: []
+    priority: info
+    start_at: end
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    # Soft limit (collector begins refusing data) = limit_mib - spike_limit_mib = 140 MiB.
+    # Hard limit = limit_mib = 180 MiB.
+    limit_mib: 180
+    spike_limit_mib: 40
+  batch/logs:
+    send_batch_size: 1024
+    send_batch_max_size: 2048
+    timeout: 5s
+
+exporters:
+  otlp:
+    endpoint: insights-otlp.digitalocean.com:443
+    tls:
+      insecure: false
+    compression: gzip
+    sending_queue:
+      enabled: true
+      queue_size: 256
+      num_consumers: 2
+    retry_on_failure:
+      enabled: true
+      max_elapsed_time: 120s
+
+service:
+  telemetry:
+    metrics:
+      address: localhost:9464 # Bind self-metrics to loopback; avoids port conflicts with other collector instances.
+  pipelines:
+    logs:
+      receivers: [journald]
+      processors: [memory_limiter, batch/logs]
+      exporters: [otlp]
