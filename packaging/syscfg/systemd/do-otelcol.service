@@ -1,6 +1,6 @@
 [Unit]
 Description=DigitalOcean OTel Contrib Collector
-After=network-online.target
+After=network-online.target do-obsd.service
 Wants=network-online.target
 
 [Service]
