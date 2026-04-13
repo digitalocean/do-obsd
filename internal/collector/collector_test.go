@@ -2,82 +2,12 @@ package collector
 
 import (
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"go.uber.org/mock/gomock"
 )
-
-func TestInstall(t *testing.T) {
-	type args struct {
-		os  *MockosOperator
-		tmp *MocktempFile
-	}
-
-	tests := []struct {
-		name    string
-		expects func(*args) error
-	}{
-		{
-			name: "happy path",
-			expects: func(a *args) error {
-				a.os.EXPECT().Open(bundlePath).Return(io.NopCloser(strings.NewReader("binary")), nil)
-				a.os.EXPECT().CreateTemp(filepath.Dir(collectorBin), gomock.Any()).Return(a.tmp, nil)
-				a.tmp.EXPECT().Name().Return("/tmp/.do-otelcol-test").AnyTimes()
-				a.tmp.EXPECT().Write(gomock.Any()).Return(6, nil)
-				a.tmp.EXPECT().Chmod(os.FileMode(0755)).Return(nil)
-				a.tmp.EXPECT().Close().Return(nil)
-				a.os.EXPECT().Rename("/tmp/.do-otelcol-test", collectorBin).Return(nil)
-				a.os.EXPECT().Remove("/tmp/.do-otelcol-test").Return(nil)
-				return nil
-			},
-		},
-		{
-			name: "bundle not found",
-			expects: func(a *args) error {
-				a.os.EXPECT().Open(bundlePath).Return(nil, os.ErrNotExist)
-				return os.ErrNotExist
-			},
-		},
-		{
-			name: "rename fails",
-			expects: func(a *args) error {
-				renameErr := errors.New("cross-device link")
-				a.os.EXPECT().Open(bundlePath).Return(io.NopCloser(strings.NewReader("binary")), nil)
-				a.os.EXPECT().CreateTemp(filepath.Dir(collectorBin), gomock.Any()).Return(a.tmp, nil)
-				a.tmp.EXPECT().Name().Return("/tmp/.do-otelcol-test").AnyTimes()
-				a.tmp.EXPECT().Write(gomock.Any()).Return(6, nil)
-				a.tmp.EXPECT().Chmod(os.FileMode(0755)).Return(nil)
-				a.tmp.EXPECT().Close().Return(nil)
-				a.os.EXPECT().Rename("/tmp/.do-otelcol-test", collectorBin).Return(renameErr)
-				a.os.EXPECT().Remove("/tmp/.do-otelcol-test").Return(nil)
-				return renameErr
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
-			mockOS := NewMockosOperator(ctrl)
-			mockTmp := NewMocktempFile(ctrl)
-
-			c := &Collector{os: mockOS}
-			expectedErr := tt.expects(&args{mockOS, mockTmp})
-
-			err := c.Install()
-
-			if !errors.Is(err, expectedErr) {
-				t.Fatalf("expected error %v, got %v", expectedErr, err)
-			}
-		})
-	}
-}
 
 func TestWriteConfig(t *testing.T) {
 	configData := []byte("service:\n  pipelines: {}\n")

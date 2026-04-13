@@ -111,11 +111,8 @@ create_users() {
 }
 
 set_permissions() {
-	# do-obsd installs the collector binary to bin/ at startup
-	secure_path dir /opt/digitalocean/bin "${SVC_NAME}:${SVC_NAME}" 755
-
-	# Bundle binary is read-only; mode only (owner from package)
-	secure_path filem "/opt/digitalocean/bundle/${OTELCOL_SVC_NAME}" 755
+	# Collector binary is shipped by the package directly to bin/; mode only (owner from package)
+	secure_path filem "/opt/digitalocean/bin/${OTELCOL_SVC_NAME}" 755
 
 	# Config: supervisor (do-obsd) writes, collector (do-otelcol) reads.
 	# The setgid bit (2750) causes new files created by do-obsd in this directory
