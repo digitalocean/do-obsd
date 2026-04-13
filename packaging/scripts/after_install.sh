@@ -6,7 +6,6 @@ set -ue
 SVC_NAME=do-obsd
 OTELCOL_SVC_NAME=do-otelcol
 OTELCOL_CONFIG_DIR=/etc/${OTELCOL_SVC_NAME}
-SUDOERS_DROPIN=/etc/sudoers.d/${SVC_NAME}
 UPDATER_TIMER=${SVC_NAME}-update.timer
 
 abort_perm() {
@@ -85,7 +84,6 @@ secure_path() {
 main() {
 	create_users
 	set_permissions
-	configure_sudoers
 
 	systemctl daemon-reload || true
 
@@ -131,28 +129,5 @@ patch_updates() {
 	systemctl restart ${UPDATER_TIMER} || true
 }
 
-# configure_sudoers grants the do-obsd service user the ability to start, stop, and restart
-# do-otelcol.service via systemctl without a password. This is required because do-obsd runs
-# as an unprivileged system user and must manage the collector lifecycle from a non-interactive
-# context (no TTY), where polkit would otherwise deny the request.
-#
-# The rule is written to a temp file and validated with visudo -c before being moved into place.
-# This prevents a syntax error from breaking all sudo access on the system before the file lands.
-configure_sudoers() {
-	_tmp=$(mktemp) || abort_perm "cannot create temp file for sudoers drop-in"
-	cat >"${_tmp}" <<'EOF'
-# Managed by do-obsd package — do not edit manually.
-# Grants the do-obsd supervisor passwordless systemctl access to do-otelcol.service only.
-do-obsd ALL=(root) NOPASSWD: /usr/bin/systemctl start do-otelcol.service, /usr/bin/systemctl stop do-otelcol.service, /usr/bin/systemctl restart do-otelcol.service
-EOF
-	# 0440: sudoers files must not be world-writable; some sudo versions refuse to load them otherwise.
-	chmod 0440 "${_tmp}" || { rm -f "${_tmp}"; abort_perm "chmod sudoers drop-in failed"; }
-	# Validate before moving into place — a bad sudoers file breaks all sudo access system-wide.
-	if command -v visudo >/dev/null 2>&1; then
-		visudo -cf "${_tmp}" || { rm -f "${_tmp}"; abort_perm "sudoers drop-in failed validation"; }
-	fi
-	# mv is atomic (rename syscall) — sudo never sees a partially written file.
-	mv "${_tmp}" "${SUDOERS_DROPIN}" || { rm -f "${_tmp}"; abort_perm "installing sudoers drop-in failed"; }
-}
 
 main
