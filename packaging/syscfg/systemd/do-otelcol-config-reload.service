@@ -4,4 +4,4 @@ After=do-otelcol.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/systemctl restart do-otelcol.service
+ExecStart=/usr/bin/systemctl try-restart do-otelcol.service
