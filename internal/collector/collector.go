@@ -1,97 +1,52 @@
 package collector
 
 import (
-	"context"
 	"fmt"
-	"io"
 	"log/slog"
 	"path/filepath"
 )
 
 const (
-	// bundlePath is where the package ships the collector binary.
-	bundlePath = "/opt/digitalocean/bundle/do-otelcol"
-
-	collectorBin     = "/opt/digitalocean/bin/do-otelcol"
-	collectorService = "do-otelcol.service"
+	collectorConfigPath = "/etc/do-otelcol/config.yaml"
 )
 
-// Collector manages the do-otelcol lifecycle.
+// Collector manages the do-otelcol binary and configuration.
 type Collector struct {
-	os  osOperator
-	cmd cmdRunner
+	os osOperator
 }
 
-// New returns a Collector with real OS and exec implementations.
+// New returns a Collector with real OS implementations.
 func New() *Collector {
 	return &Collector{
-		os:  &realOSOperator{},
-		cmd: &realCmdRunner{},
+		os: &realOSOperator{},
 	}
 }
 
-// Install copies the bundled binary from bundlePath to collectorBin atomically.
-// The bundle is shipped with the package; OpAMP will replace this with a verified
-// download from a Spaces URL once that delivery path is implemented.
-func (c *Collector) Install() error {
-	slog.Info("installing collector", "src", bundlePath, "dst", collectorBin)
+// WriteConfig atomically writes data to collectorConfigPath.
+// The temp-file-then-rename sequence ensures do-otelcol never reads a partial write.
+func (c *Collector) WriteConfig(data []byte) error {
+	slog.Info("writing collector config", "path", collectorConfigPath)
 
-	src, err := c.os.Open(bundlePath)
+	tmp, err := c.os.CreateTemp(filepath.Dir(collectorConfigPath), ".config-*.yaml")
 	if err != nil {
-		return fmt.Errorf("open bundle: %w", err)
-	}
-	defer func() { _ = src.Close() }()
-
-	tmp, err := c.os.CreateTemp(filepath.Dir(collectorBin), ".do-otelcol-*")
-	if err != nil {
-		return fmt.Errorf("create temp file: %w", err)
+		return fmt.Errorf("create temp: %w", err)
 	}
 	tmpPath := tmp.Name()
 	defer c.os.Remove(tmpPath) //nolint:errcheck
 
-	if _, err := io.Copy(tmp, src); err != nil {
+	if _, err := tmp.Write(data); err != nil {
 		_ = tmp.Close()
-		return fmt.Errorf("copy binary: %w", err)
+		return fmt.Errorf("write config: %w", err)
 	}
-	if err := tmp.Chmod(0755); err != nil {
+	if err := tmp.Chmod(0640); err != nil {
 		_ = tmp.Close()
-		return fmt.Errorf("chmod binary: %w", err)
+		return fmt.Errorf("chmod config: %w", err)
 	}
 	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("close temp file: %w", err)
+		return fmt.Errorf("close temp: %w", err)
 	}
-	if err := c.os.Rename(tmpPath, collectorBin); err != nil {
-		return fmt.Errorf("install binary: %w", err)
-	}
-	return nil
-}
-
-// Start starts do-otelcol.service via systemctl.
-func (c *Collector) Start(ctx context.Context) error {
-	slog.Info("starting collector", "service", collectorService)
-	out, err := c.cmd.Run(ctx, sudoBin, "-n", systemctlBin, "start", collectorService)
-	if err != nil {
-		return fmt.Errorf("systemctl start %s: %w (output: %s)", collectorService, err, out)
-	}
-	return nil
-}
-
-// Restart restarts do-otelcol.service via systemctl.
-func (c *Collector) Restart(ctx context.Context) error {
-	slog.Info("restarting collector", "service", collectorService)
-	out, err := c.cmd.Run(ctx, sudoBin, "-n", systemctlBin, "restart", collectorService)
-	if err != nil {
-		return fmt.Errorf("systemctl restart %s: %w (output: %s)", collectorService, err, out)
-	}
-	return nil
-}
-
-// Stop stops do-otelcol.service via systemctl.
-func (c *Collector) Stop(ctx context.Context) error {
-	slog.Info("stopping collector", "service", collectorService)
-	out, err := c.cmd.Run(ctx, sudoBin, "-n", systemctlBin, "stop", collectorService)
-	if err != nil {
-		return fmt.Errorf("systemctl stop %s: %w (output: %s)", collectorService, err, out)
+	if err := c.os.Rename(tmpPath, collectorConfigPath); err != nil {
+		return fmt.Errorf("install config: %w", err)
 	}
 	return nil
 }

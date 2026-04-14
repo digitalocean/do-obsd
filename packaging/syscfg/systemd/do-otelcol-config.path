@@ -1,0 +1,12 @@
+[Unit]
+Description=Watch do-otelcol configuration file for changes
+
+[Path]
+PathChanged=/etc/do-otelcol/config.yaml
+Unit=do-otelcol-config-reload.service
+
+[Unit]
+PartOf=do-otelcol.service
+
+[Install]
+WantedBy=do-otelcol.service

@@ -41,21 +41,6 @@ func (m *MockosOperator) EXPECT() *MockosOperatorMockRecorder {
 	return m.recorder
 }
 
-// CreateTemp mocks base method.
-func (m *MockosOperator) CreateTemp(dir, pattern string) (tempFile, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateTemp", dir, pattern)
-	ret0, _ := ret[0].(tempFile)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// CreateTemp indicates an expected call of CreateTemp.
-func (mr *MockosOperatorMockRecorder) CreateTemp(dir, pattern any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTemp", reflect.TypeOf((*MockosOperator)(nil).CreateTemp), dir, pattern)
-}
-
 // Open mocks base method.
 func (m *MockosOperator) Open(name string) (io.ReadCloser, error) {
 	m.ctrl.T.Helper()
@@ -69,6 +54,21 @@ func (m *MockosOperator) Open(name string) (io.ReadCloser, error) {
 func (mr *MockosOperatorMockRecorder) Open(name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Open", reflect.TypeOf((*MockosOperator)(nil).Open), name)
+}
+
+// CreateTemp mocks base method.
+func (m *MockosOperator) CreateTemp(dir, pattern string) (tempFile, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateTemp", dir, pattern)
+	ret0, _ := ret[0].(tempFile)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateTemp indicates an expected call of CreateTemp.
+func (mr *MockosOperatorMockRecorder) CreateTemp(dir, pattern any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTemp", reflect.TypeOf((*MockosOperator)(nil).CreateTemp), dir, pattern)
 }
 
 // Remove mocks base method.
