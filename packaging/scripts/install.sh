@@ -1,6 +1,8 @@
 #!/bin/sh
 #   curl -sSL https://obsd.sfo3.cdn.digitaloceanspaces.com/install.sh | sudo bash
 #   wget -qO- https://obsd.sfo3.cdn.digitaloceanspaces.com/install.sh | sudo bash
+#   curl -sSL …/install.sh | sudo bash -s -- --host-profile doks
+#   Omit --host-profile for normal Droplets (default).
 
 set -u
 
@@ -24,6 +26,40 @@ deb_pref=/etc/apt/preferences.d/${repo_name}.pref
 deb_keyfile=/usr/share/keyrings/${repo_name}-keyring.gpg
 rpm_repo=/etc/yum.repos.d/${repo_name}.repo
 ARCH_UNSUPPORTED_EXIT=42
+
+# Optional args: --host-profile <default|doks|gpu-droplet|droplet>
+parse_host_profile_args() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+    --host-profile)
+      [ "$#" -ge 2 ] || abort "--host-profile requires a value"
+      _hp=$(normalize_host_profile "$2")
+      validate_host_profile "${_hp}" || exit 1
+      shift 2
+      ;;
+    *)
+      abort "unknown option: $1 (try: bash -s -- --host-profile <default|doks|gpu-droplet>)"
+      ;;
+    esac
+  done
+}
+
+normalize_host_profile() {
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
+}
+
+validate_host_profile() {
+  _p=$1
+  case "${_p}" in
+  default | droplet | doks | gpu-droplet)
+    return 0
+    ;;
+  *)
+    echo "ERROR: invalid --host-profile '${_p}' (allowed: default, droplet, doks, gpu-droplet)" >&2
+    return 1
+    ;;
+  esac
+}
 
 main() {
   [ "$(id -u)" != "0" ] &&
@@ -343,4 +379,5 @@ ensure_do_agent() {
 }
 
 # leave this last to prevent any partial executions
+parse_host_profile_args "$@"
 main
