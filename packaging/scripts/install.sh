@@ -1,15 +1,21 @@
 #!/bin/sh
-#   curl -sSL https://obsd.sfo3.cdn.digitaloceanspaces.com/install.sh | sudo bash
-#   wget -qO- https://obsd.sfo3.cdn.digitaloceanspaces.com/install.sh | sudo bash
+#   curl -sSL https://repos.insights.digitalocean.com/install-obsd.sh | sudo bash
+#   wget -qO- https://repos.insights.digitalocean.com/install-obsd.sh | sudo bash
+#
+# Unstable channel:
+#   curl -sSL https://repos.insights.digitalocean.com/install-obsd.sh | sudo UNSTABLE=1 bash
 
 set -u
 
-REPO_DOMAIN="obsd.sfo3.cdn.digitaloceanspaces.com"
+UNSTABLE=${UNSTABLE:-0}
+
+REPO_DOMAIN="repos.insights.digitalocean.com"
 REPO_HOST="https://${REPO_DOMAIN}"
-REPO_GPG_KEY=${REPO_HOST}/gpg.key
-INSTALL_SCRIPT_URL="${REPO_HOST}/install.sh"
+REPO_GPG_KEY=${REPO_HOST}/gpg-obsd.key
+INSTALL_SCRIPT_URL="${REPO_HOST}/install-obsd.sh"
 
 branch="do-obsd-preview"
+[ "${UNSTABLE}" != 0 ] && branch="do-obsd-unstable"
 
 RETRY_CRON_SCHEDULE=/etc/cron.hourly
 RETRY_CRON=${RETRY_CRON_SCHEDULE}/do-obsd-install
@@ -119,7 +125,7 @@ fi
 
 now=\$(date +"%T")
 echo "Retry at: \${now}" >> "\${log_file}"
-/bin/sh "\${tmp_file}" >> "\${log_file}" 2>&1
+UNSTABLE=${UNSTABLE} /bin/sh "\${tmp_file}" >> "\${log_file}" 2>&1
 EOF
 
   chmod +x "${RETRY_CRON}"
