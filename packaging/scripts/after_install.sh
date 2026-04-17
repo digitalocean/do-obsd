@@ -7,6 +7,7 @@ SVC_NAME=do-obsd
 OTELCOL_SVC_NAME=do-otelcol
 OTELCOL_CONFIG_DIR=/etc/${OTELCOL_SVC_NAME}
 UPDATER_TIMER=${SVC_NAME}-update.timer
+INSIGHTS_OTLP_HOSTS_BIN=/opt/digitalocean/bin/insights-otlp-hosts
 
 abort_perm() {
 	echo "ERROR: $1" >&2
@@ -84,6 +85,7 @@ secure_path() {
 main() {
 	create_users
 	set_permissions
+	apply_insights_otlp_hosts
 
 	systemctl daemon-reload || true
 
@@ -114,6 +116,7 @@ create_users() {
 set_permissions() {
 	# Collector binary is shipped by the package directly to bin/; mode only (owner from package)
 	secure_path filem "/opt/digitalocean/bin/${OTELCOL_SVC_NAME}" 755
+	secure_path filem "${INSIGHTS_OTLP_HOSTS_BIN}" 755
 
 	# Config: supervisor (do-obsd) writes, collector (do-otelcol) reads.
 	# The setgid bit (2750) causes new files created by do-obsd in this directory
@@ -128,6 +131,27 @@ patch_updates() {
 	echo "enable updater timer"
 	systemctl enable -f ${UPDATER_TIMER} || true
 	systemctl restart ${UPDATER_TIMER} || true
+}
+
+# Map insights-otlp.digitalocean.com to the VPC private endpoint (derived from eth1)
+# when public DNS is not yet usable. Safe to skip on hosts without eth1.
+# Set DO_OBSD_SKIP_INSIGHTS_OTLP_HOSTS=1 to disable (e.g. debugging).
+apply_insights_otlp_hosts() {
+	if [ "${DO_OBSD_SKIP_INSIGHTS_OTLP_HOSTS:-0}" != "0" ]; then
+		echo "Skipping insights OTLP /etc/hosts workaround (DO_OBSD_SKIP_INSIGHTS_OTLP_HOSTS is set)"
+		return 0
+	fi
+	if [ ! -x "${INSIGHTS_OTLP_HOSTS_BIN}" ]; then
+		return 0
+	fi
+	if [ ! -e /sys/class/net/eth1 ]; then
+		echo "No eth1; skipping insights OTLP VPC hosts workaround"
+		return 0
+	fi
+	echo "Applying insights OTLP VPC /etc/hosts entry if needed"
+	if ! "${INSIGHTS_OTLP_HOSTS_BIN}" -apply; then
+		echo "WARNING: ${INSIGHTS_OTLP_HOSTS_BIN} -apply failed; OTLP may need working DNS for insights-otlp.digitalocean.com" >&2
+	fi
 }
 
 main

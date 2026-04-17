@@ -1,4 +1,6 @@
 bin/
+/do-obsd
+/insights-otlp-hosts
 dist/
 target/
 *.deb

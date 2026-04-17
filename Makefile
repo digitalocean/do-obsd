@@ -16,7 +16,7 @@ linter = docker run --rm \
 
 mockgen = go tool mockgen
 
-.PHONY: build build-insights-otlp-hosts test lint mocks
+.PHONY: build build-insights-otlp-hosts build-linux-binaries test lint mocks
 
 build:
 	$(print)
@@ -25,6 +25,10 @@ build:
 build-insights-otlp-hosts:
 	$(print)
 	CGO_ENABLED=0 go build -trimpath -o bin/insights-otlp-hosts ./cmd/insights-otlp-hosts
+
+build-linux-binaries:
+	$(print)
+	VERSION=$(shell git describe --tags --always --dirty) sh packaging/scripts/build-linux-binaries.sh
 
 test:
 	$(print)
