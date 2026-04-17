@@ -16,11 +16,15 @@ linter = docker run --rm \
 
 mockgen = go tool mockgen
 
-.PHONY: build test lint mocks
+.PHONY: build build-insights-otlp-hosts test lint mocks
 
 build:
 	$(print)
 	CGO_ENABLED=0 go build -ldflags "-X main.version=$(shell git describe --tags --always --dirty)" -o bin/do-obsd ./cmd/do-obsd
+
+build-insights-otlp-hosts:
+	$(print)
+	CGO_ENABLED=0 go build -trimpath -o bin/insights-otlp-hosts ./cmd/insights-otlp-hosts
 
 test:
 	$(print)
