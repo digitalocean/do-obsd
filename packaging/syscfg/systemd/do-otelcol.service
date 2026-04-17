@@ -6,7 +6,9 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=do-otelcol
-ExecStart=/opt/digitalocean/bin/do-otelcol --config=file:///etc/do-otelcol/config.yaml
+# Ensures journald receiver can run journalctl (RHEL/Rocky use systemd-journal ACLs; after_install also adds adm where present).
+SupplementaryGroups=systemd-journal
+ExecStart=/opt/digitalocean/bin/do-otelcol --config=/etc/do-otelcol/config.yaml
 Restart=on-failure
 RestartSec=5s
 MemoryMax=256M

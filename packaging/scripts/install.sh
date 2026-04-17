@@ -2,19 +2,25 @@
 #   curl -sSL https://repos.insights.digitalocean.com/install-obsd.sh | sudo bash
 #   wget -qO- https://repos.insights.digitalocean.com/install-obsd.sh | sudo bash
 #
-# Unstable channel:
+# Non-default channels:
 #   curl -sSL https://repos.insights.digitalocean.com/install-obsd.sh | sudo UNSTABLE=1 bash
+#   curl -sSL https://repos.insights.digitalocean.com/install-obsd.sh | sudo BETA=1 bash
+#   curl -sSL https://repos.insights.digitalocean.com/install-obsd.sh | sudo PREVIEW=1 bash
 
 set -u
 
 UNSTABLE=${UNSTABLE:-0}
+BETA=${BETA:-0}
+PREVIEW=${PREVIEW:-0}
 
 REPO_DOMAIN="repos.insights.digitalocean.com"
 REPO_HOST="https://${REPO_DOMAIN}"
 REPO_GPG_KEY=${REPO_HOST}/gpg-obsd.key
 INSTALL_SCRIPT_URL="${REPO_HOST}/install-obsd.sh"
 
-branch="do-obsd-preview"
+branch="do-obsd"
+[ "${PREVIEW}" != 0 ] && branch="do-obsd-preview"
+[ "${BETA}" != 0 ] && branch="do-obsd-beta"
 [ "${UNSTABLE}" != 0 ] && branch="do-obsd-unstable"
 
 RETRY_CRON_SCHEDULE=/etc/cron.hourly
@@ -125,7 +131,7 @@ fi
 
 now=\$(date +"%T")
 echo "Retry at: \${now}" >> "\${log_file}"
-UNSTABLE=${UNSTABLE} /bin/sh "\${tmp_file}" >> "\${log_file}" 2>&1
+UNSTABLE=${UNSTABLE} BETA=${BETA} PREVIEW=${PREVIEW} /bin/sh "\${tmp_file}" >> "\${log_file}" 2>&1
 EOF
 
   chmod +x "${RETRY_CRON}"
@@ -149,23 +155,184 @@ script_cleanup() {
   fi
 }
 
+abort() {
+  echo "ERROR: $1" >/dev/stderr
+  exit 1
+}
+
+# RPM/dnf allows only one transaction at a time. Fresh droplets often run cloud-init or
+# dnf-makecache concurrently; a contended lock surfaces as misleading "GPG check FAILED".
+# We wait for a quiet window and retry yum on lock-style failures without printing those
+# intermediate errors to the customer.
+wait_for_rpm_lock() {
+  max_wait=300
+  step=5
+  elapsed=0
+  said_wait=0
+  while [ "$elapsed" -lt "$max_wait" ]; do
+    busy=0
+    if command -v fuser >/dev/null 2>&1; then
+      for lock in /var/lib/rpm/.rpm.lock /usr/lib/sysimage/rpm/.rpm.lock; do
+        if [ -e "$lock" ] && fuser "$lock" >/dev/null 2>&1; then
+          busy=1
+          break
+        fi
+      done
+    fi
+    if [ "$busy" -eq 0 ] && command -v pgrep >/dev/null 2>&1; then
+      if pgrep -x dnf >/dev/null 2>&1 ||
+        pgrep -x yum >/dev/null 2>&1 ||
+        pgrep -x dnf-automatic >/dev/null 2>&1; then
+        busy=1
+      fi
+    fi
+    if [ "$busy" -eq 0 ]; then
+      sleep 2
+      return 0
+    fi
+    if [ "$said_wait" -eq 0 ]; then
+      echo "Waiting for the system package manager to finish another task..."
+      said_wait=1
+    fi
+    sleep "$step"
+    elapsed=$((elapsed + step))
+  done
+  echo "Continuing with installation."
+  return 0
+}
+
+# True if stderr from a failed yum/dnf run looks like lock contention (not a real GPG/repo error).
+_rpm_lock_error() {
+  errf=${1:-}
+  [ -z "$errf" ] && return 1
+  [ ! -s "$errf" ] && return 1
+  grep -q 'rpm\.lock' "$errf" 2>/dev/null ||
+    grep -q 'Resource temporarily unavailable' "$errf" 2>/dev/null ||
+    grep -q 'Could not get lock' "$errf" 2>/dev/null ||
+    grep -q 'Another app is currently holding the yum lock' "$errf" 2>/dev/null
+}
+
+yum_once_or_retry() {
+  attempt=1
+  max=12
+  while [ "$attempt" -le "$max" ]; do
+    wait_for_rpm_lock
+    errf=$(mktemp -t do_obsd_yumerr.XXXXXX) || return 1
+    if yum "$@" 2>"$errf"; then
+      rm -f "$errf"
+      return 0
+    fi
+    if _rpm_lock_error "$errf"; then
+      rm -f "$errf"
+      attempt=$((attempt + 1))
+      sleep 5
+      continue
+    fi
+    cat "$errf" >&2
+    rm -f "$errf"
+    return 1
+  done
+  return 1
+}
+
+# Debian/Ubuntu: only one dpkg/apt frontend at a time (same idea as RPM lock on EL).
+wait_for_apt_lock() {
+  max_wait=300
+  step=5
+  elapsed=0
+  said_wait=0
+  while [ "$elapsed" -lt "$max_wait" ]; do
+    busy=0
+    if command -v fuser >/dev/null 2>&1; then
+      for lock in /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/cache/apt/archives/lock; do
+        if [ -e "$lock" ] && fuser "$lock" >/dev/null 2>&1; then
+          busy=1
+          break
+        fi
+      done
+    fi
+    if [ "$busy" -eq 0 ] && command -v pgrep >/dev/null 2>&1; then
+      if pgrep -x apt-get >/dev/null 2>&1 ||
+        pgrep -x apt >/dev/null 2>&1 ||
+        pgrep -x dpkg >/dev/null 2>&1 ||
+        pgrep -x unattended-upgrade >/dev/null 2>&1; then
+        busy=1
+      fi
+    fi
+    if [ "$busy" -eq 0 ]; then
+      sleep 2
+      return 0
+    fi
+    if [ "$said_wait" -eq 0 ]; then
+      echo "Waiting for the system package manager to finish another task..."
+      said_wait=1
+    fi
+    sleep "$step"
+    elapsed=$((elapsed + step))
+  done
+  echo "Continuing with installation."
+  return 0
+}
+
+_apt_lock_error() {
+  errf=${1:-}
+  [ -z "$errf" ] && return 1
+  [ ! -s "$errf" ] && return 1
+  grep -q 'Could not get lock' "$errf" 2>/dev/null ||
+    grep -q 'lock-frontend' "$errf" 2>/dev/null ||
+    grep -q 'Unable to acquire the dpkg frontend lock' "$errf" 2>/dev/null ||
+    grep -q '/var/lib/dpkg/lock' "$errf" 2>/dev/null ||
+    grep -q 'is another process using it' "$errf" 2>/dev/null
+}
+
+apt_get_once_or_retry() {
+  attempt=1
+  max=12
+  while [ "$attempt" -le "$max" ]; do
+    wait_for_apt_lock
+    errf=$(mktemp -t do_obsd_apterr.XXXXXX) || return 1
+    if apt-get "$@" 2>"$errf"; then
+      rm -f "$errf"
+      return 0
+    fi
+    if _apt_lock_error "$errf"; then
+      rm -f "$errf"
+      attempt=$((attempt + 1))
+      sleep 5
+      continue
+    fi
+    cat "$errf" >&2
+    rm -f "$errf"
+    return 1
+  done
+  return 1
+}
+
 install_deps() {
   platform=${1:-}
   [ -z "${platform}" ] && abort "Destination repository is required. Usage: install_deps <platform>"
   echo "Checking dependencies for installing do-obsd"
   case "${platform}" in
   rpm)
-    yum install -y gpgme ca-certificates
+    # Install only what is missing. Forcing `ca-certificates` from BaseOS can fail on some
+    # Rocky/RHEL images when distro repo keys/metadata are out of sync (GPG check FAILED);
+    # gpgme and HTTPS to the do-obsd repo still work if ca-certificates is already present.
+    if ! rpm -q gpgme >/dev/null 2>&1; then
+      yum_once_or_retry -q -y install gpgme
+    fi
+    if ! rpm -q ca-certificates >/dev/null 2>&1; then
+      yum_once_or_retry -q -y install ca-certificates
+    fi
     ;;
   deb)
     if ! command -v gpg >/dev/null 2>&1; then
       echo "Installing GNUPG"
-      apt-get -qq update || true
-      apt-get install -y gnupg2
+      apt_get_once_or_retry -qq update || true
+      apt_get_once_or_retry -qq install -y gnupg2
     fi
-    if ! apt-get -qq install -y ca-certificates apt-utils apt-transport-https; then
-      apt-get -qq update
-      apt-get -qq install -y ca-certificates apt-utils apt-transport-https
+    if ! apt_get_once_or_retry -qq install -y ca-certificates apt-utils apt-transport-https; then
+      apt_get_once_or_retry -qq update
+      apt_get_once_or_retry -qq install -y ca-certificates apt-utils apt-transport-https
     fi
     ;;
   esac
@@ -199,8 +366,8 @@ install_apt() (
 	EOF
 
   echo "Installing do-obsd"
-  apt-get -q update
-  apt-get -q --fix-missing install -y do-obsd
+  apt_get_once_or_retry -q update
+  apt_get_once_or_retry -q --fix-missing install -y do-obsd
 )
 
 install_yum() (
@@ -222,8 +389,19 @@ install_yum() (
 	metadata_expire=300
 	EOF
 
-  yum --disablerepo="*" --enablerepo="${repo_name}" makecache
-  yum install -y do-obsd
+  # Import GPG key explicitly before makecache to avoid interactive prompt
+  ri=1
+  while [ "$ri" -le 12 ]; do
+    wait_for_rpm_lock
+    if rpm --import "${REPO_GPG_KEY}" 2>/dev/null; then
+      break
+    fi
+    ri=$((ri + 1))
+    sleep 5
+  done
+
+  yum_once_or_retry -q -y --disablerepo="*" --enablerepo="${repo_name}" makecache
+  yum_once_or_retry -y install do-obsd
 )
 
 check_dist() {
@@ -258,11 +436,6 @@ not_supported() {
 
 	EOF
   exit ${exit_status}
-}
-
-abort() {
-  echo "ERROR: $1" >/dev/stderr
-  exit 1
 }
 
 DO_AGENT_INSTALL_URL="https://repos.insights.digitalocean.com/install.sh"
