@@ -33,7 +33,13 @@ exporters:
 service:
   telemetry:
     metrics:
-      address: localhost:9464 # Bind self-metrics to loopback; avoids port conflicts with other collector instances.
+      # Internal metrics on loopback only (replaces deprecated metrics.address for otelcol 0.130+).
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: 127.0.0.1
+                port: 9464
   pipelines:
     logs:
       receivers: [journald]
