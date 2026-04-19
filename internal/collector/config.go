@@ -19,7 +19,7 @@ func BuildConfig(ip net.IP) ([]byte, error) {
 	data := struct {
 		ExporterEndpoint string
 	}{
-		ExporterEndpoint: fmt.Sprintf("%s:443", ip),
+		ExporterEndpoint: net.JoinHostPort(ip.String(), "443"),
 	}
 	var buf bytes.Buffer
 	if err := parsedConfigTmpl.Execute(&buf, data); err != nil {
