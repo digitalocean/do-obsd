@@ -1,8 +1,8 @@
 package collector
 
 import (
-	_ "embed"
 	"bytes"
+	_ "embed"
 	"fmt"
 	"net"
 	"text/template"
