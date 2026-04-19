@@ -18,9 +18,12 @@ processors:
 
 exporters:
   otlp:
-    endpoint: insights-otlp.digitalocean.com:443
+    endpoint: {{ .ExporterEndpoint }}
+    headers:
+      Host: insights-otlp.digitalocean.com
     tls:
       insecure: false
+      server_name_override: insights-otlp.digitalocean.com
     compression: gzip
     sending_queue:
       enabled: true

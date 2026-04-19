@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/digitalocean/do-obsd/internal/collector"
+	"github.com/digitalocean/do-obsd/internal/vpcendpoint"
 )
 
 var version = "dev"
@@ -24,9 +25,19 @@ func main() {
 func run() error {
 	slog.Info("starting", "version", version)
 
-	col := collector.New()
+	ip, err := vpcendpoint.New().Discover()
+	if err != nil {
+		return fmt.Errorf("discover vpc endpoint: %w", err)
+	}
+	slog.Info("discovered vpc endpoint", "ip", ip)
 
-	if err := col.WriteConfig(collector.GPUConfig); err != nil {
+	config, err := collector.BuildConfig(ip)
+	if err != nil {
+		return fmt.Errorf("build collector config: %w", err)
+	}
+
+	col := collector.New()
+	if err := col.WriteConfig(config); err != nil {
 		return fmt.Errorf("write collector config: %w", err)
 	}
 
