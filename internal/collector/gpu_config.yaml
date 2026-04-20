@@ -3,6 +3,22 @@ receivers:
     units: []
     priority: info
     start_at: end
+    operators:
+      - type: severity_parser
+        parse_from: body.PRIORITY
+        overwrite_text: true
+        preset: none
+        mapping:
+          fatal:
+            - "0" # emerg
+            - "1" # alert
+            - "2" # crit
+          error: "3" # err
+          warn: "4" # warning
+          info:
+            - "5" # notice
+            - "6" # info
+          debug: "7" # debug
 
 processors:
   memory_limiter:
