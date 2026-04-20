@@ -1,10 +1,29 @@
 package collector
 
-import _ "embed"
+import (
+	"bytes"
+	_ "embed"
+	"fmt"
+	"net"
+	"text/template"
+)
 
-// GPUConfig is the bootstrap otelcol configuration for GPU droplet instances.
-// In the future, instance-type-specific configurations will be delivered at
-// runtime via OpAMP, making this the fallback for first boot only.
-//
-//go:embed gpu_config.yaml
-var GPUConfig []byte
+//go:embed config.yaml.tmpl
+var configTmpl string
+
+var parsedConfigTmpl = template.Must(template.New("config").Parse(configTmpl))
+
+// BuildConfig renders the collector config with the given VPC endpoint IP.
+// The exporter endpoint is set to <ip>:443.
+func BuildConfig(ip net.IP) ([]byte, error) {
+	data := struct {
+		ExporterEndpoint string
+	}{
+		ExporterEndpoint: net.JoinHostPort(ip.String(), "443"),
+	}
+	var buf bytes.Buffer
+	if err := parsedConfigTmpl.Execute(&buf, data); err != nil {
+		return nil, fmt.Errorf("render config: %w", err)
+	}
+	return buf.Bytes(), nil
+}
