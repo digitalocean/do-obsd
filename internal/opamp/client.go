@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 	"runtime"
 	"sort"
 	"strings"
@@ -171,7 +172,12 @@ func (c *Client) onMessage(ctx context.Context, msg *opamptypes.MessageData) {
 	if err := c.client.UpdateEffectiveConfig(ctx); err != nil {
 		slog.ErrorContext(ctx, "opamp update effective config failed", "err", err)
 	}
-	slog.InfoContext(ctx, "opamp remote config applied")
+	sum := sha256.Sum256(configBody)
+	slog.InfoContext(ctx, "opamp remote config applied",
+		"bytes", len(configBody),
+		"config_sha256", fmt.Sprintf("%x", sum[:]),
+	)
+	restartCollectorAfterRemoteConfig(ctx)
 }
 
 func (c *Client) agentDescription() *protobufs.AgentDescription {
@@ -240,6 +246,28 @@ func instanceUID() (opamptypes.InstanceUid, error) {
 	var id opamptypes.InstanceUid
 	copy(id[:], sum[:16])
 	return id, nil
+}
+
+// restartCollectorAfterRemoteConfig runs systemctl try-restart when
+// DO_OBSD_RESTART_COLLECTOR_AFTER_CONFIG is 1/true/yes/y (for droplets where
+// systemd path units are not installed or you want an explicit restart).
+func restartCollectorAfterRemoteConfig(ctx context.Context) {
+	switch strings.TrimSpace(strings.ToLower(os.Getenv("DO_OBSD_RESTART_COLLECTOR_AFTER_CONFIG"))) {
+	case "1", "true", "yes", "y":
+	default:
+		return
+	}
+	cmd := exec.CommandContext(ctx, "systemctl", "try-restart", "do-otelcol.service")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		slog.WarnContext(ctx, "opamp: collector restart failed", "err", err, "output", strings.TrimSpace(string(out)))
+		return
+	}
+	if len(out) > 0 {
+		slog.InfoContext(ctx, "opamp: collector restarted", "output", strings.TrimSpace(string(out)))
+	} else {
+		slog.InfoContext(ctx, "opamp: collector try-restart issued")
+	}
 }
 
 type logger struct{}

@@ -3,12 +3,22 @@ package collector
 import (
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
+	"strings"
 )
 
-const (
-	collectorConfigPath = "/etc/do-otelcol/config.yaml"
-)
+// DefaultCollectorConfigPath is used when DO_OBSD_COLLECTOR_CONFIG_PATH is unset.
+const DefaultCollectorConfigPath = "/etc/do-otelcol/config.yaml"
+
+// ResolvedCollectorConfigPath returns the path WriteConfig uses.
+// Override with DO_OBSD_COLLECTOR_CONFIG_PATH for prototyping (e.g. under $HOME).
+func ResolvedCollectorConfigPath() string {
+	if p := strings.TrimSpace(os.Getenv("DO_OBSD_COLLECTOR_CONFIG_PATH")); p != "" {
+		return p
+	}
+	return DefaultCollectorConfigPath
+}
 
 // Collector manages the do-otelcol binary and configuration.
 type Collector struct {
@@ -22,12 +32,17 @@ func New() *Collector {
 	}
 }
 
-// WriteConfig atomically writes data to collectorConfigPath.
+// WriteConfig atomically writes data to the resolved collector config path.
 // The temp-file-then-rename sequence ensures do-otelcol never reads a partial write.
 func (c *Collector) WriteConfig(data []byte) error {
-	slog.Info("writing collector config", "path", collectorConfigPath)
+	path := ResolvedCollectorConfigPath()
+	slog.Info("writing collector config", "path", path)
 
-	tmp, err := c.os.CreateTemp(filepath.Dir(collectorConfigPath), ".config-*.yaml")
+	if err := os.MkdirAll(filepath.Dir(path), 0750); err != nil {
+		return fmt.Errorf("ensure config dir: %w", err)
+	}
+
+	tmp, err := c.os.CreateTemp(filepath.Dir(path), ".config-*.yaml")
 	if err != nil {
 		return fmt.Errorf("create temp: %w", err)
 	}
@@ -45,7 +60,7 @@ func (c *Collector) WriteConfig(data []byte) error {
 	if err := tmp.Close(); err != nil {
 		return fmt.Errorf("close temp: %w", err)
 	}
-	if err := c.os.Rename(tmpPath, collectorConfigPath); err != nil {
+	if err := c.os.Rename(tmpPath, path); err != nil {
 		return fmt.Errorf("install config: %w", err)
 	}
 	return nil

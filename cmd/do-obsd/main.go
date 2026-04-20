@@ -25,7 +25,7 @@ func main() {
 }
 
 func run() error {
-	slog.Info("starting", "version", version)
+	slog.Info("starting", "version", version, "collector_config_path", collector.ResolvedCollectorConfigPath())
 
 	col := collector.New()
 

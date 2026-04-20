@@ -10,7 +10,10 @@ import (
 )
 
 func TestWriteConfig(t *testing.T) {
+	t.Setenv("DO_OBSD_COLLECTOR_CONFIG_PATH", filepath.Join(t.TempDir(), "otel", "config.yaml"))
 	configData := []byte("service:\n  pipelines: {}\n")
+	dest := ResolvedCollectorConfigPath()
+	destDir := filepath.Dir(dest)
 
 	tests := []struct {
 		name    string
@@ -19,12 +22,12 @@ func TestWriteConfig(t *testing.T) {
 		{
 			name: "happy path",
 			expects: func(mockOS *MockosOperator, tmp *MocktempFile) error {
-				mockOS.EXPECT().CreateTemp(filepath.Dir(collectorConfigPath), gomock.Any()).Return(tmp, nil)
+				mockOS.EXPECT().CreateTemp(destDir, gomock.Any()).Return(tmp, nil)
 				tmp.EXPECT().Name().Return("/tmp/.config-test.yaml").AnyTimes()
 				tmp.EXPECT().Write(gomock.Any()).Return(len(configData), nil)
 				tmp.EXPECT().Chmod(os.FileMode(0640)).Return(nil)
 				tmp.EXPECT().Close().Return(nil)
-				mockOS.EXPECT().Rename("/tmp/.config-test.yaml", collectorConfigPath).Return(nil)
+				mockOS.EXPECT().Rename("/tmp/.config-test.yaml", dest).Return(nil)
 				mockOS.EXPECT().Remove("/tmp/.config-test.yaml").Return(nil)
 				return nil
 			},
@@ -33,7 +36,7 @@ func TestWriteConfig(t *testing.T) {
 			name: "write fails",
 			expects: func(mockOS *MockosOperator, tmp *MocktempFile) error {
 				writeErr := errors.New("disk full")
-				mockOS.EXPECT().CreateTemp(filepath.Dir(collectorConfigPath), gomock.Any()).Return(tmp, nil)
+				mockOS.EXPECT().CreateTemp(destDir, gomock.Any()).Return(tmp, nil)
 				tmp.EXPECT().Name().Return("/tmp/.config-test.yaml").AnyTimes()
 				tmp.EXPECT().Write(gomock.Any()).Return(0, writeErr)
 				tmp.EXPECT().Close().Return(nil)
@@ -45,12 +48,12 @@ func TestWriteConfig(t *testing.T) {
 			name: "rename fails",
 			expects: func(mockOS *MockosOperator, tmp *MocktempFile) error {
 				renameErr := errors.New("cross-device link")
-				mockOS.EXPECT().CreateTemp(filepath.Dir(collectorConfigPath), gomock.Any()).Return(tmp, nil)
+				mockOS.EXPECT().CreateTemp(destDir, gomock.Any()).Return(tmp, nil)
 				tmp.EXPECT().Name().Return("/tmp/.config-test.yaml").AnyTimes()
 				tmp.EXPECT().Write(gomock.Any()).Return(len(configData), nil)
 				tmp.EXPECT().Chmod(os.FileMode(0640)).Return(nil)
 				tmp.EXPECT().Close().Return(nil)
-				mockOS.EXPECT().Rename("/tmp/.config-test.yaml", collectorConfigPath).Return(renameErr)
+				mockOS.EXPECT().Rename("/tmp/.config-test.yaml", dest).Return(renameErr)
 				mockOS.EXPECT().Remove("/tmp/.config-test.yaml").Return(nil)
 				return renameErr
 			},
