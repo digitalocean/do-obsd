@@ -33,7 +33,7 @@ processors:
     timeout: 5s
 
 exporters:
-  otlp:
+  otlp_grpc:
     endpoint: { { .ExporterEndpoint } }
     headers:
       Host: insights-otlp.digitalocean.com
