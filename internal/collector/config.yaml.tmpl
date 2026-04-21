@@ -63,4 +63,4 @@ service:
     logs:
       receivers: [journald]
       processors: [memory_limiter, batch/logs]
-      exporters: [otlp]
+      exporters: [otlp_grpc]
