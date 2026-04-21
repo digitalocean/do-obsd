@@ -34,7 +34,7 @@ processors:
 
 exporters:
   otlp_grpc:
-    endpoint: { { .ExporterEndpoint } }
+    endpoint: {{ .ExporterEndpoint }}
     headers:
       Host: insights-otlp.digitalocean.com
     tls:
