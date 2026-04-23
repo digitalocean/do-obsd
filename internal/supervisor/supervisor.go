@@ -10,13 +10,15 @@ import (
 
 // Supervisor manages the do-otelcol binary and configuration.
 type Supervisor struct {
-	os osOperator
+	dropletType string
+	os          osOperator
 }
 
 // New returns a Supervisor with real OS implementations.
-func New() *Supervisor {
+func New(dropletType string) *Supervisor {
 	return &Supervisor{
-		os: &realOSOperator{},
+		dropletType: dropletType,
+		os:          &realOSOperator{},
 	}
 }
 
