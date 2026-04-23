@@ -7,7 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/digitalocean/do-obsd/internal/collector"
+	"github.com/digitalocean/do-obsd/internal/supervisor"
 	"github.com/digitalocean/do-obsd/internal/vpcendpoint"
 )
 
@@ -31,12 +31,12 @@ func run() error {
 	}
 	slog.Info("discovered vpc endpoint", "ip", ip)
 
-	config, err := collector.BuildConfig(ip)
+	config, err := supervisor.BuildConfig(ip)
 	if err != nil {
 		return fmt.Errorf("build collector config: %w", err)
 	}
 
-	col := collector.New()
+	col := supervisor.New()
 	if err := col.WriteConfig(config); err != nil {
 		return fmt.Errorf("write collector config: %w", err)
 	}
