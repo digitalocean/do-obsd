@@ -64,10 +64,10 @@ func TestWriteConfig(t *testing.T) {
 
 			mockOS := NewMockosOperator(ctrl)
 			mockTmp := NewMocktempFile(ctrl)
-			c := &Collector{os: mockOS}
+			s := &Supervisor{os: mockOS}
 			expectedErr := tt.expects(mockOS, mockTmp)
 
-			err := c.WriteConfig(configData)
+			err := s.writeConfig(configData)
 
 			if !errors.Is(err, expectedErr) {
 				t.Fatalf("expected error %v, got %v", expectedErr, err)
