@@ -67,7 +67,7 @@ func TestWriteConfig(t *testing.T) {
 			s := &Supervisor{os: mockOS}
 			expectedErr := tt.expects(mockOS, mockTmp)
 
-			err := s.writeConfig(configData)
+			err := s.writeCollectorConfig(configData)
 
 			if !errors.Is(err, expectedErr) {
 				t.Fatalf("expected error %v, got %v", expectedErr, err)

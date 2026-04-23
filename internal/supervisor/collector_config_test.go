@@ -26,7 +26,7 @@ func TestBuildConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := BuildConfig(tt.ip)
+			got, err := buildCollectorConfig(tt.ip)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
