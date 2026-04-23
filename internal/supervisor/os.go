@@ -1,6 +1,6 @@
-package collector
+package supervisor
 
-//go:generate go tool mockgen -source=os.go -package=collector -destination=mocks_os_test.go
+//go:generate go tool mockgen -source=os.go -package=supervisor -destination=mocks_os_test.go
 
 import (
 	"io"
