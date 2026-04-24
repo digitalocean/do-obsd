@@ -19,6 +19,9 @@ receivers:
             - "5" # notice
             - "6" # info
           debug: "7" # debug
+      - type: copy
+        from: body.SYSLOG_IDENTIFIER
+        to: resource["service.name"]
 
 processors:
   memory_limiter:
