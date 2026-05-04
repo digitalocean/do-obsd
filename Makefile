@@ -16,11 +16,18 @@ linter = docker run --rm \
 
 mockgen = go tool mockgen
 
+# Overridable by the release pipeline (VERSION=1.2.3 make build). Default falls
+# back to git describe (e.g. 0.1.2-3-gabc) or to "dev" outside a git checkout.
+# Leading 'v' stripped from any source to match the deb/rpm package version format.
+override VERSION := $(patsubst v%,%,$(or $(VERSION),$(shell git describe --tags --always 2>/dev/null),dev))
+
+ldflags = -s -w -X main.version=$(VERSION)
+
 .PHONY: build test lint mocks
 
 build:
 	$(print)
-	CGO_ENABLED=0 go build -ldflags "-X main.version=$(shell git describe --tags --always --dirty)" -o bin/do-obsd ./cmd/do-obsd
+	CGO_ENABLED=0 go build -trimpath -ldflags '$(ldflags)' -o bin/do-obsd ./cmd/do-obsd
 
 test:
 	$(print)
