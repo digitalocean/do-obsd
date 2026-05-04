@@ -84,6 +84,7 @@ secure_path() {
 main() {
 	create_users
 	set_permissions
+	install_cli_symlink
 
 	systemctl daemon-reload || true
 
@@ -121,6 +122,19 @@ set_permissions() {
 	# (temp file + rename) are readable by the collector without an explicit chown.
 	secure_path dir "${OTELCOL_CONFIG_DIR}" "${SVC_NAME}:${OTELCOL_SVC_NAME}" 2750
 	secure_path file "${OTELCOL_CONFIG_DIR}/config.yaml" "${SVC_NAME}:${OTELCOL_SVC_NAME}" 640
+}
+
+# Expose the supervisor on the default PATH (e.g. `do-obsd -version`) by
+# symlinking from /usr/bin to the real install location under /opt. Idempotent:
+# replaces an existing symlink, refuses to clobber a real file.
+install_cli_symlink() {
+	_target="/opt/digitalocean/bin/${SVC_NAME}"
+	_link="/usr/bin/${SVC_NAME}"
+
+	if [ -e "${_link}" ] && [ ! -L "${_link}" ]; then
+		abort_perm "Refusing to replace existing non-symlink at: ${_link}"
+	fi
+	ln -sfn "${_target}" "${_link}" || abort_perm "Failed to create symlink: ${_link} -> ${_target}"
 }
 
 patch_updates() {

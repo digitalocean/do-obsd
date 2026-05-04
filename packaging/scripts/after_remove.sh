@@ -26,6 +26,7 @@ main() {
 
 	clean_systemd
 	remove_cron
+	remove_cli_symlink
 
 	# full cleanup on purge (deb) or complete removal (rpm arg=0)
 	if [ "${arg}" = "purge" ] || [ "${arg}" = "0" ]; then
@@ -36,6 +37,17 @@ main() {
 remove_cron() {
 	rm -fv "${CRON}"
 	rm -fv "/etc/cron.d/${SVC_NAME}" "/etc/cron.hourly/${SVC_NAME}" "/etc/cron.daily/${SVC_NAME}" || true
+}
+
+# Remove the /usr/bin/do-obsd PATH shim installed by after_install.sh. Only
+# touches the path if it's a symlink AND still points at our install location,
+# so an admin-managed real file or a manually rerouted symlink is left untouched.
+remove_cli_symlink() {
+	_link="/usr/bin/${SVC_NAME}"
+	_target="/opt/digitalocean/bin/${SVC_NAME}"
+	if [ -L "${_link}" ] && [ "$(readlink "${_link}")" = "${_target}" ]; then
+		rm -f "${_link}"
+	fi
 }
 
 clean_systemd() {
