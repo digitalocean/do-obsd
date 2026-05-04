@@ -49,7 +49,7 @@ func Info() BuildInfo {
 // Print writes a human-readable version block to w.
 func Print(w io.Writer) {
 	bi := Info()
-	fmt.Fprintf(w, `do-obsd (DigitalOcean Observability Supervisor)
+	_, _ = fmt.Fprintf(w, `do-obsd (DigitalOcean Observability Supervisor)
 Version:    %s
 Revision:   %s
 Build Date: %s
