@@ -16,12 +16,10 @@ linter = docker run --rm \
 
 mockgen = go tool mockgen
 
-# Overridable by the release pipeline (VERSION=1.2.3 make build). Default keeps
-# current dev UX (e.g. v0.1.2-3-gabc-dirty). Strip a leading 'v' so the in-binary
-# version matches the deb/rpm package version format that
-# packaging/scripts/update.sh already parses. Falls back to "dev" outside a git
-# checkout (e.g. when building from an extracted source tarball).
-VERSION ?= $(or $(patsubst v%,%,$(shell git describe --tags --always --dirty 2>/dev/null)),dev)
+# Overridable by the release pipeline (VERSION=1.2.3 make build). Default falls
+# back to git describe (e.g. 0.1.2-3-gabc) or to "dev" outside a git checkout.
+# Leading 'v' stripped from any source to match the deb/rpm package version format.
+override VERSION := $(patsubst v%,%,$(or $(VERSION),$(shell git describe --tags --always 2>/dev/null),dev))
 
 ldflags = -s -w -X main.version=$(VERSION)
 
