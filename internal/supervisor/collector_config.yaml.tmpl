@@ -53,15 +53,6 @@ exporters:
       max_elapsed_time: 120s
 
 service:
-  telemetry:
-    metrics:
-      # Internal metrics on loopback only (replaces deprecated metrics.address for otelcol 0.130+).
-      readers:
-        - pull:
-            exporter:
-              prometheus:
-                host: 127.0.0.1
-                port: 9464
   pipelines:
     logs:
       receivers: [journald]
