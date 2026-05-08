@@ -53,6 +53,23 @@ exporters:
       max_elapsed_time: 120s
 
 service:
+  telemetry:
+    metrics:
+      level: normal # Options: none, basic, normal, detailed
+      readers:
+        - periodic:
+            interval: 60s # How often to send internal metrics
+            exporter:
+              otlp:
+                # Directing internal metrics to your existing exporter
+                endpoint: {{ .ExporterEndpoint }}
+                protocol: grpc
+                headers:
+                  - name: Host
+                    value: insights-otlp.digitalocean.com
+    # Optional: Send collector internal logs as OTLP logs too
+    logs:
+      level: info
   pipelines:
     logs:
       receivers: [journald]
