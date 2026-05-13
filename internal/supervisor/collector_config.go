@@ -17,11 +17,17 @@ var collectorConfigTmpl string
 
 var parsedCollectorConfigTmpl = template.Must(template.New("collector_config").Parse(collectorConfigTmpl))
 
+// insightsOTLPHost is the OTLP TLS server name. Internal telemetry gRPC uses it as the dial
+// host so SNI matches the certificate; it must resolve to the VPC OTLP IP (not public DNS only).
+const insightsOTLPHost = "insights-otlp.digitalocean.com"
+
 func buildCollectorConfig(ip net.IP) ([]byte, error) {
 	data := struct {
-		ExporterEndpoint string
+		ExporterEndpoint     string
+		InternalOTLPEndpoint string
 	}{
-		ExporterEndpoint: net.JoinHostPort(ip.String(), "443"),
+		ExporterEndpoint:     net.JoinHostPort(ip.String(), "443"),
+		InternalOTLPEndpoint: net.JoinHostPort(insightsOTLPHost, "443"),
 	}
 	var buf bytes.Buffer
 	if err := parsedCollectorConfigTmpl.Execute(&buf, data); err != nil {

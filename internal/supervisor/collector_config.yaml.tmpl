@@ -58,11 +58,12 @@ service:
       level: normal # Options: none, basic, normal, detailed
       readers:
         - periodic:
-            interval: 60s # How often to send internal metrics
+            interval: 60000 # How often to send internal metrics
             exporter:
               otlp:
-                # Directing internal metrics to your existing exporter
-                endpoint: {{ .ExporterEndpoint }}
+                # Internal OTLP must use a hostname for TLS SNI (SDK path has no server_name_override).
+                # Must resolve to the same VPC target as ExporterEndpoint (DNS or /etc/hosts).
+                endpoint: {{ .InternalOTLPEndpoint }}
                 protocol: grpc
                 headers:
                   - name: Host
