@@ -1,4 +1,12 @@
 receivers:
+  prometheus/internal:
+    config:
+      scrape_configs:
+        - job_name: otelcol
+          scrape_interval: 60s
+          static_configs:
+            - targets: ['127.0.0.1:9464']
+
   journald:
     units: []
     priority: info
@@ -30,7 +38,19 @@ processors:
     # Hard limit = limit_mib = 180 MiB.
     limit_mib: 180
     spike_limit_mib: 40
+  transform/internal:
+    metric_statements:
+      - context: metric
+        statements:
+          - set(name, Concat(["do_", name], ""))
+      - context: datapoint
+        statements:
+          - set(attributes["do-obsd-ver"], "0.1")
   batch/logs:
+    send_batch_size: 1024
+    send_batch_max_size: 2048
+    timeout: 5s
+  batch/metrics:
     send_batch_size: 1024
     send_batch_max_size: 2048
     timeout: 5s
@@ -55,7 +75,7 @@ exporters:
 service:
   telemetry:
     metrics:
-      # Internal metrics on loopback only (replaces deprecated metrics.address for otelcol 0.130+).
+      level: normal
       readers:
         - pull:
             exporter:
@@ -66,4 +86,8 @@ service:
     logs:
       receivers: [journald]
       processors: [memory_limiter, batch/logs]
+      exporters: [otlp_grpc]
+    metrics/internal:
+      receivers: [prometheus/internal]
+      processors: [memory_limiter, transform/internal, batch/metrics]
       exporters: [otlp_grpc]
