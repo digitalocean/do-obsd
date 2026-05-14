@@ -1,4 +1,12 @@
 receivers:
+  prometheus/internal:
+    config:
+      scrape_configs:
+        - job_name: otelcol
+          scrape_interval: 60s
+          static_configs:
+            - targets: ['127.0.0.1:9464']
+
   journald:
     units: []
     priority: info
@@ -30,7 +38,19 @@ processors:
     # Hard limit = limit_mib = 180 MiB.
     limit_mib: 180
     spike_limit_mib: 40
+  transform/internal:
+    metric_statements:
+      - context: metric
+        statements:
+          - set(name, Concat(["do_", name], ""))
+      - context: datapoint
+        statements:
+          - set(attributes["do-obsd-ver"], "0.1")
   batch/logs:
+    send_batch_size: 1024
+    send_batch_max_size: 2048
+    timeout: 5s
+  batch/metrics:
     send_batch_size: 1024
     send_batch_max_size: 2048
     timeout: 5s
@@ -55,24 +75,19 @@ exporters:
 service:
   telemetry:
     metrics:
-      level: normal # Options: none, basic, normal, detailed
+      level: normal
       readers:
-        - periodic:
-            interval: 60000 # How often to send internal metrics
+        - pull:
             exporter:
-              otlp:
-                # Internal OTLP must use a hostname for TLS SNI (SDK path has no server_name_override).
-                # Must resolve to the same VPC target as ExporterEndpoint (DNS or /etc/hosts).
-                endpoint: {{ .InternalOTLPEndpoint }}
-                protocol: grpc
-                headers:
-                  - name: Host
-                    value: insights-otlp.digitalocean.com
-    # Optional: Send collector internal logs as OTLP logs too
-    logs:
-      level: info
+              prometheus:
+                host: 127.0.0.1
+                port: 9464
   pipelines:
     logs:
       receivers: [journald]
       processors: [memory_limiter, batch/logs]
+      exporters: [otlp_grpc]
+    metrics/internal:
+      receivers: [prometheus/internal]
+      processors: [memory_limiter, transform/internal, batch/metrics]
       exporters: [otlp_grpc]

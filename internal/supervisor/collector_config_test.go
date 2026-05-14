@@ -40,11 +40,11 @@ func TestBuildConfig(t *testing.T) {
 			if !strings.Contains(s, "server_name_override: insights-otlp.digitalocean.com") {
 				t.Fatalf("server_name_override not found in config:\n%s", s)
 			}
-			if !strings.Contains(s, "interval: 60000") {
-				t.Fatalf("internal telemetry periodic interval (ms) not found in config:\n%s", s)
+			if !strings.Contains(s, "level: normal") {
+				t.Fatalf("telemetry metrics level: normal not found in config:\n%s", s)
 			}
-			if !strings.Contains(s, "endpoint: insights-otlp.digitalocean.com:443") {
-				t.Fatalf("internal telemetry OTLP hostname endpoint not found in config:\n%s", s)
+			if !strings.Contains(s, "scrape_interval: 60s") {
+				t.Fatalf("scrape_interval: 60s not found in config:\n%s", s)
 			}
 		})
 	}
